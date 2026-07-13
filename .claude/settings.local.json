@@ -9,7 +9,9 @@
       "Bash(git branch *)",
       "Bash(git push *)",
       "Bash(echo \"app.db\")",
-      "Bash(git commit -m 'Replace in-memory user store with SQLite *)"
+      "Bash(git commit -m 'Replace in-memory user store with SQLite *)",
+      "Bash(git commit -m 'Add list and update user endpoints *)",
+      "Bash(git commit -m 'Split into handlers and store packages *)"
     ]
   }
 }

@@ -53,7 +53,7 @@ func (h *Users) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Users) List(w http.ResponseWriter, r *http.Request) {
-	var users []User
+	users := []User{} // non-nil so an empty list encodes as [], not null
 	rows, err := h.DB.Query("SELECT id, name FROM users")
 	if err != nil {
 		http.Error(w, "query failed", http.StatusInternalServerError)

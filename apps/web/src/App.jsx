@@ -1,121 +1,104 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useEffect, useState } from 'react'
 import './App.css'
 
+const API = 'http://localhost:8080'
+
 function App() {
-  const [count, setCount] = useState(0)
+  const [users, setUsers] = useState([])
+  const [id, setId] = useState('')
+  const [name, setName] = useState('')
+  const [error, setError] = useState('')
+
+  async function loadUsers() {
+    try {
+      const res = await fetch(`${API}/users`)
+      if (!res.ok) throw new Error(`server returned ${res.status}`)
+      setUsers(await res.json())
+      setError('')
+    } catch (err) {
+      setError(`Failed to load users: ${err.message}`)
+    }
+  }
+
+  useEffect(() => {
+    loadUsers()
+  }, [])
+
+  async function createUser(e) {
+    e.preventDefault()
+    try {
+      const res = await fetch(`${API}/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, name }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `server returned ${res.status}`)
+      }
+      setId('')
+      setName('')
+      await loadUsers()
+    } catch (err) {
+      setError(`Failed to create user: ${err.message}`)
+    }
+  }
+
+  async function renameUser(user) {
+    const newName = window.prompt(`New name for ${user.name}:`, user.name)
+    if (!newName || newName === user.name) return
+    try {
+      const res = await fetch(`${API}/users/${user.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName }),
+      })
+      if (!res.ok) throw new Error(`server returned ${res.status}`)
+      await loadUsers()
+    } catch (err) {
+      setError(`Failed to update user: ${err.message}`)
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <main className="app">
+      <h1>Users</h1>
 
-      <div className="ticks"></div>
+      {error && <p className="error">{error}</p>}
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      <form onSubmit={createUser}>
+        <input
+          value={id}
+          onChange={(e) => setId(e.target.value)}
+          placeholder="ID"
+          required
+        />
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Name"
+          required
+        />
+        <button type="submit">Add</button>
+      </form>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      {users.length === 0 ? (
+        <p>No users yet.</p>
+      ) : (
+        <ul>
+          {users.map((u) => (
+            <li key={u.id}>
+              <span>
+                <code>{u.id}</code> {u.name}
+              </span>
+              <button type="button" onClick={() => renameUser(u)}>
+                Rename
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </main>
   )
 }
 

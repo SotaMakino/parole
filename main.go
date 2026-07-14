@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"example.com/hello-go/handlers"
+	"example.com/hello-go/middleware"
 	"example.com/hello-go/store"
 )
 
@@ -22,6 +23,6 @@ func main() {
 	mux.HandleFunc("POST /users", h.Create)
 	mux.HandleFunc("PUT /users/{id}", h.Update)
 
-	log.Println("listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	handler := middleware.Logging(middleware.CORS(mux))
+	log.Fatal(http.ListenAndServe(":8080", handler))
 }

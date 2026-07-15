@@ -47,9 +47,10 @@ func main() {
 	mux.Handle("/users", middleware.Auth(db, users))
 	mux.Handle("/users/", middleware.Auth(db, users))
 
+	allowedOrigin := env("ALLOWED_ORIGIN", "http://localhost:5173")
 	srv := &http.Server{
 		Addr:    ":" + port,
-		Handler: middleware.Logging(middleware.CORS(mux)),
+		Handler: middleware.Logging(middleware.CORS(allowedOrigin, mux)),
 	}
 
 	go func() {

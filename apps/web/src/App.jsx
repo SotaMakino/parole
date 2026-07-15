@@ -3,7 +3,7 @@ import AuthForm from './AuthForm'
 import { logout } from './api/auth'
 import './App.css'
 
-const API = 'http://localhost:8080'
+const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
 
 function App() {
   const [authed, setAuthed] = useState(null) // null = still checking

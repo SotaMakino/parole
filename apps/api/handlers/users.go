@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -111,4 +112,25 @@ func (u *User) validate() string {
 		return "name must be 100 characters or fewer"
 	}
 	return ""
+}
+
+func (h *Users) Stats(w http.ResponseWriter, r *http.Request) {
+	var users, accounts, sessions int
+	var wg sync.WaitGroup
+
+	count := func(table string, dest *int) {
+		defer wg.Done()
+		h.DB.QueryRow("SELECT count(*) FROM " + table).Scan(dest)
+	}
+
+	wg.Add(3)
+	go count("users", &users)
+	go count("accounts", &accounts)
+	go count("sessions", &sessions)
+	wg.Wait()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]int{
+		"users": users, "accounts": accounts, "sessions": sessions,
+	})
 }

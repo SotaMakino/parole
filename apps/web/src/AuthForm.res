@@ -5,6 +5,7 @@ let make = (~onSuccess: unit => unit) => {
   let (password, setPassword) = React.useState(() => "")
   let (error, setError) = React.useState(() => "")
   let (busy, setBusy) = React.useState(() => false)
+  let (showPassword, setShowPassword) = React.useState(() => false)
 
   let submit = async e => {
     ReactEvent.Form.preventDefault(e)
@@ -35,20 +36,28 @@ let make = (~onSuccess: unit => unit) => {
         autoComplete="username"
         required=true
       />
-      <input
-        type_="password"
-        value=password
-        onChange={e => {
-          let value = ReactEvent.Form.target(e)["value"]
-          setPassword(_ => value)
-        }}
-        placeholder="Password"
-        autoComplete={mode == #login ? "current-password" : "new-password"}
-        minLength=8
-        required=true
-      />
-      <button type_="submit" disabled=busy>
-        {React.string(mode == #login ? "Log in" : "Create account")}
+      <div className="password-field">
+        <input
+          type_={showPassword ? "text" : "password"}
+          value=password
+          onChange={e => {
+            let value = ReactEvent.Form.target(e)["value"]
+            setPassword(_ => value)
+          }}
+          placeholder="Password"
+          autoComplete={mode == #login ? "current-password" : "new-password"}
+          minLength=8
+          required=true
+        />
+        <button
+          type_="button" className="toggle-password" onClick={_ => setShowPassword(s => !s)}>
+          {React.string(showPassword ? "Hide" : "Show")}
+        </button>
+      </div>
+      <button type_="submit" className="primary" disabled=busy>
+        {React.string(
+          busy ? "Please wait…" : mode == #login ? "Log in" : "Create account",
+        )}
       </button>
     </form>
     <p>

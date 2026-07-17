@@ -1,10 +1,12 @@
 {
   "name": "hello-go",
   "private": true,
+  "workspaces": ["apps/*"],
+  "trustedDependencies": ["rescript"],
   "scripts": {
     "dev:api": "cd apps/api && go run .",
-    "dev:web": "pnpm --filter web dev",
+    "dev:web": "cd apps/web && bun run dev",
     "test:api": "cd apps/api && go test ./...",
-    "build:web": "pnpm --filter web build"
+    "build:web": "cd apps/web && bun run build"
   }
 }

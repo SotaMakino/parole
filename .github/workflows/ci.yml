@@ -47,20 +47,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
 
       - name: Install
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Lint
-        run: pnpm --filter web lint
+        run: bun run lint
+        working-directory: apps/web
 
       - name: Build
-        run: pnpm --filter web build
+        run: bun run build
+        working-directory: apps/web

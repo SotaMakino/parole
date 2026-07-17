@@ -4,12 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "bunx --bun vite",
     "res:build": "rescript",
     "res:watch": "rescript build -w",
-    "build": "rescript && vite build",
+    "build": "rescript && bunx --bun vite build",
     "lint": "rescript clean && rescript build",
-    "preview": "vite preview"
+    "preview": "bunx --bun vite preview"
   },
   "dependencies": {
     "@rescript/react": "^0.13.1",

@@ -1,11 +1,11 @@
 # hello-go
 
-pnpm monorepo with a Go API and a Vite + React client.
+Bun monorepo with a Go API and a Vite + ReScript (React) client.
 
 ```
 apps/
 ├── api/   # Go REST API (PostgreSQL)
-└── web/   # Vite + React client
+└── web/   # Vite + ReScript (React) client
 ```
 
 Live at **https://hello-go.pages.dev** (API on https://hello-go-hail.onrender.com).
@@ -13,7 +13,7 @@ Live at **https://hello-go.pages.dev** (API on https://hello-go-hail.onrender.co
 ## Setup
 
 ```bash
-pnpm install
+bun install
 ```
 
 Requires a local PostgreSQL server. The API creates its tables on startup in the `hellodb` database:
@@ -25,7 +25,7 @@ createdb hellodb
 ## Run the server (API)
 
 ```bash
-pnpm dev:api
+bun run dev:api
 # or
 cd apps/api && go run .
 ```
@@ -41,9 +41,9 @@ Runs on http://localhost:8080. Environment variables:
 ## Run the client (web)
 
 ```bash
-pnpm dev:web
+bun run dev:web
 # or
-cd apps/web && pnpm dev
+cd apps/web && bun run dev
 ```
 
 Runs on http://localhost:5173. The API base URL comes from `VITE_API_URL`
@@ -53,7 +53,7 @@ Runs on http://localhost:5173. The API base URL comes from `VITE_API_URL`
 
 ```bash
 createdb hellodb_test   # once
-pnpm test:api
+bun run test:api
 ```
 
 Tests run against the `hellodb_test` database (override with `TEST_DATABASE_URL`)

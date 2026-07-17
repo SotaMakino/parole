@@ -10,6 +10,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@rescript/react':
+        specifier: ^0.13.1
+        version: 0.13.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       react:
         specifier: ^19.2.7
         version: 19.2.7
@@ -29,6 +32,9 @@ importers:
       oxlint:
         specifier: ^1.71.0
         version: 1.73.0
+      rescript:
+        specifier: ^11.1.4
+        version: 11.1.4
       vite:
         specifier: ^8.1.1
         version: 8.1.4
@@ -166,6 +172,12 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [win32]
+
+  '@rescript/react@0.13.1':
+    resolution: {integrity: sha512-VIWtu/sAJyYmDVoAhit0LHDYQrW6RqZ6z8sh8san5cjEAT4klv8JWkiaSK3FGUfooUDkGUXXgKTkqyj8zRR21w==}
+    peerDependencies:
+      react: '>=18.0.0'
+      react-dom: '>=18.0.0'
 
   '@rolldown/binding-android-arm64@1.1.5':
     resolution: {integrity: sha512-lZg8fqIv2v7FF237bwMgzGZEJvGL79/s5knJ/i6FmsGF4XXlzccZ4jb+TrFIxtSSxFtIpdsgrPZeMk1I9AFcyQ==}
@@ -412,6 +424,11 @@ packages:
     resolution: {integrity: sha512-HNe9WslTbXmFK8o8cmwgAeJFSBvt1bPdHCVKtaaV+WlAN36mpT4hcRpwbf3fY56ar2oIXzsBpOAiIRHAdY0OlQ==}
     engines: {node: '>=0.10.0'}
 
+  rescript@11.1.4:
+    resolution: {integrity: sha512-0bGU0bocihjSC6MsE3TMjHjY0EUpchyrREquLS8VsZ3ohSMD+VHUEwimEfB3kpBI1vYkw3UFZ3WD8R28guz/Vw==}
+    engines: {node: '>=10'}
+    hasBin: true
+
   rolldown@1.1.5:
     resolution: {integrity: sha512-t9z29cJjXf/vxQ8dyhCSpt6H6aSwHTk8cT5I3iy6SMXuFpk5mB6PL6XfC8PCwrPTx93udwKUm9HRteAlTGBLiA==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -557,6 +574,11 @@ snapshots:
 
   '@oxlint/binding-win32-x64-msvc@1.73.0':
     optional: true
+
+  '@rescript/react@0.13.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+    dependencies:
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
 
   '@rolldown/binding-android-arm64@1.1.5':
     optional: true
@@ -727,6 +749,8 @@ snapshots:
       scheduler: 0.27.0
 
   react@19.2.7: {}
+
+  rescript@11.1.4: {}
 
   rolldown@1.1.5:
     dependencies:

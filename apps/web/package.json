@@ -5,13 +5,23 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "gleam:build": "gleam build",
-    "build": "gleam build && vite build",
+    "res:build": "rescript",
+    "res:watch": "rescript build -w",
+    "build": "rescript && vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },
+  "dependencies": {
+    "@rescript/react": "^0.13.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
   "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
     "oxlint": "^1.71.0",
+    "rescript": "^11.1.4",
     "vite": "^8.1.1"
   }
 }

@@ -1,12 +1,26 @@
 package middleware
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 )
+
+type contextKey struct{}
+
+// WithUser returns a context carrying the authenticated username.
+func WithUser(ctx context.Context, username string) context.Context {
+	return context.WithValue(ctx, contextKey{}, username)
+}
+
+// Username returns the authenticated username set by Auth, or "" if absent.
+func Username(r *http.Request) string {
+	u, _ := r.Context().Value(contextKey{}).(string)
+	return u
+}
 
 func Auth(db *sql.DB, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -26,7 +40,7 @@ func Auth(db *sql.DB, next http.Handler) http.Handler {
 			return
 		}
 
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(WithUser(r.Context(), username)))
 	})
 }
 

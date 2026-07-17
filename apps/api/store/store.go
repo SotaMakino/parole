@@ -14,7 +14,6 @@ func Open(url string) (*sql.DB, error) {
 	if err := db.Ping(); err != nil {
 		return nil, err
 	}
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT)`)
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS accounts (
 		username TEXT PRIMARY KEY,
 		password_hash TEXT NOT NULL
@@ -23,6 +22,12 @@ func Open(url string) (*sql.DB, error) {
 		token TEXT PRIMARY KEY,
 		username TEXT NOT NULL,
 		expires_at TIMESTAMPTZ NOT NULL
+	)`)
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS todos (
+		id BIGSERIAL PRIMARY KEY,
+		username TEXT NOT NULL,
+		title TEXT NOT NULL,
+		UNIQUE (username, title)
 	)`)
 	return db, err
 }

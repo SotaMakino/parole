@@ -1,58 +1,62 @@
 %%raw(`import "./App.css"`)
 
-type user = {id: string, name: string}
-
-@scope("window") @val
-external prompt: (string, string) => Js.Nullable.t<string> = "prompt"
+type todo = {id: int, title: string}
 
 @react.component
 let make = () => {
   let (authed, setAuthed) = React.useState(() => None) // None = still checking
-  let (users, setUsers) = React.useState(() => [])
-  let (id, setId) = React.useState(() => "")
-  let (name, setName) = React.useState(() => "")
+  let (todos, setTodos) = React.useState(() => [])
+  let (title, setTitle) = React.useState(() => "")
   let (error, setError) = React.useState(() => "")
+  let (fieldError, setFieldError) = React.useState(() => "") // client-side validation
+  let (busy, setBusy) = React.useState(() => false)
 
-  let loadUsers = async () => {
+  let loadTodos = async () => {
     setError(_ => "")
-    switch await ApiClient.request("/users") {
+    switch await ApiClient.request("/todos") {
     | Ok(res) => {
-        let fetched: array<user> = await ApiClient.json(res)
-        setUsers(_ => fetched)
+        let fetched: array<todo> = await ApiClient.json(res)
+        setTodos(_ => fetched)
         setAuthed(_ => Some(true))
       }
     | Error(err) if err.status == 401 => setAuthed(_ => Some(false))
-    | Error(err) => setError(_ => `Failed to load users: ${err.message}`)
+    | Error(err) => setError(_ => `Failed to load todos: ${err.message}`)
     }
   }
 
   React.useEffect0(() => {
-    loadUsers()->ignore
+    loadTodos()->ignore
     None
   })
 
-  let createUser = async e => {
+  let addTodo = async e => {
     ReactEvent.Form.preventDefault(e)
-    switch await ApiClient.request("/users", ~method_="POST", ~body={"id": id, "name": name}) {
-    | Ok(_) => {
-        setId(_ => "")
-        setName(_ => "")
-        await loadUsers()
+    let trimmed = title->Js.String2.trim
+    let isDuplicate =
+      todos->Belt.Array.some(t =>
+        t.title->Js.String2.toLowerCase == trimmed->Js.String2.toLowerCase
+      )
+    if trimmed == "" {
+      setFieldError(_ => "A todo cannot be empty.")
+    } else if isDuplicate {
+      setFieldError(_ => `"${trimmed}" is already on your list.`)
+    } else {
+      setBusy(_ => true)
+      switch await ApiClient.request("/todos", ~method_="POST", ~body={"title": trimmed}) {
+      | Ok(_) => {
+          setTitle(_ => "")
+          await loadTodos()
+        }
+      | Error(err) => setError(_ => `Failed to add todo: ${err.message}`)
       }
-    | Error(err) => setError(_ => `Failed to create user: ${err.message}`)
+      setBusy(_ => false)
     }
   }
 
-  let renameUser = async (user: user) => {
-    let newName =
-      prompt(`New name for ${user.name}:`, user.name)
-      ->Js.Nullable.toOption
-      ->Belt.Option.getWithDefault("")
-    if newName != "" && newName != user.name {
-      switch await ApiClient.request(`/users/${user.id}`, ~method_="PUT", ~body={"name": newName}) {
-      | Ok(_) => await loadUsers()
-      | Error(err) => setError(_ => `Failed to update user: ${err.message}`)
-      }
+  let deleteTodo = async (todo: todo) => {
+    switch await ApiClient.request(`/todos/${todo.id->Belt.Int.toString}`, ~method_="DELETE") {
+    | Ok(_) => await loadTodos()
+    | Error(err) => setError(_ => `Failed to delete todo: ${err.message}`)
     }
   }
 
@@ -67,58 +71,60 @@ let make = () => {
     // still checking the session; if the check itself failed, say so
     error == ""
       ? <main className="app">
-          <p> {React.string("Connecting to server…")} </p>
+          <div className="loading-screen">
+            <div className="spinner" />
+            <p> {React.string("Connecting to server…")} </p>
+          </div>
         </main>
       : <main className="app">
-          <p className="error"> {React.string(error)} </p>
-          <button type_="button" onClick={_ => loadUsers()->ignore}>
+          <p className="error" role="alert"> {React.string(error)} </p>
+          <button type_="button" className="primary" onClick={_ => loadTodos()->ignore}>
             {React.string("Retry")}
           </button>
         </main>
   | Some(false) =>
     <main className="app">
-      <AuthForm onSuccess={() => loadUsers()->ignore} />
+      <AuthForm onSuccess={() => loadTodos()->ignore} />
     </main>
   | Some(true) =>
     <main className="app">
-      <h1> {React.string("Users")} </h1>
-      <button type_="button" className="link" onClick={_ => handleLogout()->ignore}>
-        {React.string("Log out")}
-      </button>
-      {error == "" ? React.null : <p className="error"> {React.string(error)} </p>}
-      <form onSubmit={e => createUser(e)->ignore}>
+      <header className="app-header">
+        <h1> {React.string("My todos")} </h1>
+        <button type_="button" className="ghost" onClick={_ => handleLogout()->ignore}>
+          {React.string("Log out")}
+        </button>
+      </header>
+      {error == "" ? React.null : <p className="error" role="alert"> {React.string(error)} </p>}
+      <form className="add-form" onSubmit={e => addTodo(e)->ignore}>
         <input
-          value=id
+          value=title
           onChange={e => {
             let value = ReactEvent.Form.target(e)["value"]
-            setId(_ => value)
+            setTitle(_ => value)
+            setFieldError(_ => "")
           }}
-          placeholder="ID"
-          required=true
+          placeholder="What needs doing?"
+          ariaLabel="New todo"
         />
-        <input
-          value=name
-          onChange={e => {
-            let value = ReactEvent.Form.target(e)["value"]
-            setName(_ => value)
-          }}
-          placeholder="Name"
-          required=true
-        />
-        <button type_="submit"> {React.string("Add")} </button>
+        <button type_="submit" className="primary" disabled=busy>
+          {React.string("Add")}
+        </button>
       </form>
-      {users->Belt.Array.length == 0
-        ? <p> {React.string("No users yet.")} </p>
-        : <ul>
-            {users
-            ->Belt.Array.map(u =>
-              <li key=u.id>
-                <span>
-                  <code> {React.string(u.id)} </code>
-                  {React.string(" " ++ u.name)}
-                </span>
-                <button type_="button" onClick={_ => renameUser(u)->ignore}>
-                  {React.string("Rename")}
+      {fieldError == ""
+        ? React.null
+        : <p className="field-error" role="alert"> {React.string(fieldError)} </p>}
+      {todos->Belt.Array.length == 0
+        ? <p className="empty"> {React.string("Nothing to do. Add your first todo above.")} </p>
+        : <ul className="todo-list">
+            {todos
+            ->Belt.Array.map(t =>
+              <li key={t.id->Belt.Int.toString} className="todo-row">
+                <span className="todo-title"> {React.string(t.title)} </span>
+                <button
+                  type_="button"
+                  className="ghost small danger"
+                  onClick={_ => deleteTodo(t)->ignore}>
+                  {React.string("Delete")}
                 </button>
               </li>
             )

@@ -29,7 +29,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	h := &handlers.Todos{DB: db}
+	h := &handlers.Games{DB: db}
 	a := &handlers.Auth{DB: db}
 	mux := http.NewServeMux()
 
@@ -39,12 +39,12 @@ func main() {
 	mux.HandleFunc("POST /logout", a.Logout)
 
 	// protected — wrap a sub-mux with Auth
-	todos := http.NewServeMux()
-	todos.HandleFunc("GET /todos", h.List)
-	todos.HandleFunc("POST /todos", h.Create)
-	todos.HandleFunc("DELETE /todos/{id}", h.Delete)
-	mux.Handle("/todos", middleware.Auth(db, todos))
-	mux.Handle("/todos/", middleware.Auth(db, todos))
+	game := http.NewServeMux()
+	game.HandleFunc("GET /game", h.Current)
+	game.HandleFunc("POST /game", h.New)
+	game.HandleFunc("POST /game/guess", h.Guess)
+	mux.Handle("/game", middleware.Auth(db, game))
+	mux.Handle("/game/", middleware.Auth(db, game))
 
 	allowedOrigin := env("ALLOWED_ORIGIN", "http://localhost:5173")
 	srv := &http.Server{

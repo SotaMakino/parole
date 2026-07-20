@@ -96,6 +96,9 @@ func firstN(n int) []string {
 }
 
 func TestWords_UppercaseAndUnique(t *testing.T) {
+	if len(words) < 500 {
+		t.Errorf("expected at least 500 words, got %d", len(words))
+	}
 	seen := map[string]bool{}
 	for _, v := range words {
 		for _, w := range []string{v.Italian, v.English} {
@@ -115,7 +118,7 @@ func TestWords_UppercaseAndUnique(t *testing.T) {
 	}
 }
 
-func TestCurrentGame_CreatesFirstCurriculumRound(t *testing.T) {
+func TestCurrentGame_CreatesRandomRound(t *testing.T) {
 	h := setupGames(t)
 
 	rec := httptest.NewRecorder()
@@ -131,10 +134,15 @@ func TestCurrentGame_CreatesFirstCurriculumRound(t *testing.T) {
 	if len(s.Pairs) != WordsPerRound {
 		t.Fatalf("expected %d pairs, got %d", WordsPerRound, len(s.Pairs))
 	}
+	seen := map[string]bool{}
 	for i, p := range s.Pairs {
-		if p.Italian != curriculum(i) {
-			t.Errorf("pair %d: expected %q, got %q", i, curriculum(i), p.Italian)
+		if english[p.Italian] == "" {
+			t.Errorf("pair %d: %q is not in the word list", i, p.Italian)
 		}
+		if seen[p.Italian] {
+			t.Errorf("%q served twice in one round", p.Italian)
+		}
+		seen[p.Italian] = true
 		if len(p.English) != len(english[p.Italian]) {
 			t.Errorf("pair %d: expected %d blanks, got %d",
 				i, len(english[p.Italian]), len(p.English))
@@ -324,7 +332,7 @@ func TestCurrentGame_ScopedToUser(t *testing.T) {
 	}
 }
 
-func TestNextWords_AdvancesThroughCurriculum(t *testing.T) {
+func TestNextWords_RandomButNeverRepeatsPlayedWords(t *testing.T) {
 	h := setupGames(t)
 	finishRound(t, h, "ann", firstN(5), "won")
 
@@ -332,9 +340,25 @@ func TestNextWords_AdvancesThroughCurriculum(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{curriculum(5), curriculum(6), curriculum(7), curriculum(8), curriculum(9)}
-	if strings.Join(ws, ",") != strings.Join(want, ",") {
-		t.Errorf("expected %v, got %v", want, ws)
+	if len(ws) != WordsPerRound {
+		t.Fatalf("expected %d words, got %v", WordsPerRound, ws)
+	}
+	played := map[string]bool{}
+	for _, w := range firstN(5) {
+		played[w] = true
+	}
+	seen := map[string]bool{}
+	for _, w := range ws {
+		if english[w] == "" {
+			t.Errorf("%q is not in the word list", w)
+		}
+		if played[w] {
+			t.Errorf("%q was already won and must not repeat yet", w)
+		}
+		if seen[w] {
+			t.Errorf("%q served twice in one round", w)
+		}
+		seen[w] = true
 	}
 }
 
@@ -363,8 +387,15 @@ func TestNextWords_MissedRoundNotDueYet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := firstN(15)[10:]
-	if strings.Join(ws, ",") != strings.Join(want, ",") {
-		t.Errorf("expected the next unseen words %v, got %v", want, ws)
+	// the loss is only one round old, so none of the ten played words may
+	// appear yet — the round must be filled from unseen words instead
+	played := map[string]bool{}
+	for _, w := range firstN(10) {
+		played[w] = true
+	}
+	for _, w := range ws {
+		if played[w] {
+			t.Errorf("%q is not due yet but was served: %v", w, ws)
+		}
 	}
 }

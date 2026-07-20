@@ -10,9 +10,10 @@ Finish with more than five misses and the round's words are flagged to come
 back for review — or hit Retry to play the same five again right away.
 
 It leans on research-backed techniques: retrieval practice (you recall the
-English from the Italian), cognates first (the curriculum starts with Italian
-words an English speaker can almost guess), immediate feedback, and spaced
-repetition (flagged words return three rounds later).
+English from the Italian), immediate feedback, and spaced repetition (flagged
+words return three rounds later). The word pool holds 800+ essential beginner
+words — nouns, verbs, adjectives, numbers, months — and every new round draws
+five of them at random.
 
 Each user gets their own progress behind cookie-session auth; letters are
 checked server-side so the answers never reach the browser until the round is
@@ -67,10 +68,11 @@ session cookie, scoped to the logged-in user:
   five flags the round for review), and the full answers appear only when
   the round ends
 
-The curriculum (Italian word + English translation, cognates first) lives in
+The word pool (800+ Italian words with English translations) lives in
 `apps/api/handlers/words.go`. New rounds pick five words server-side: words
-from a round lost at least three rounds ago come back for review, otherwise
-the next not-yet-played words in curriculum order.
+from a round flagged at least three rounds ago come back for review first,
+and the remaining slots are filled at random from words the user has not
+played yet.
 
 ## Run the client (web)
 

@@ -45,21 +45,34 @@ func asUser(user, method, target string, body string) *http.Request {
 	return req.WithContext(middleware.WithUser(req.Context(), user))
 }
 
-// startGame inserts a game with a known answer so tests can guess against it.
-func startGame(t *testing.T, h *Games, user, word string) int64 {
+// fixed round used by most tests; English: TRAIN, BANK, MUSIC, LION, PARK.
+var testRound = []string{"TRENO", "BANCA", "MUSICA", "LEONE", "PARCO"}
+
+// startRound inserts a playing round with known words.
+func startRound(t *testing.T, h *Games, user string, ws []string) int64 {
 	t.Helper()
 	var id int64
 	if err := h.DB.QueryRow(
 		"INSERT INTO games (username, word, status) VALUES ($1, $2, 'playing') RETURNING id",
-		user, word).Scan(&id); err != nil {
+		user, strings.Join(ws, ",")).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
 	return id
 }
 
-func guessWord(h *Games, user, word string) *httptest.ResponseRecorder {
+// finishRound records a completed round directly, for curriculum tests.
+func finishRound(t *testing.T, h *Games, user string, ws []string, status string) {
+	t.Helper()
+	if _, err := h.DB.Exec(
+		"INSERT INTO games (username, word, status) VALUES ($1, $2, $3)",
+		user, strings.Join(ws, ","), status); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func guessLetter(h *Games, user, letter string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
-	h.Guess(rec, asUser(user, "POST", "/game/guess", `{"guess":"`+word+`"}`))
+	h.Guess(rec, asUser(user, "POST", "/game/guess", `{"guess":"`+letter+`"}`))
 	return rec
 }
 
@@ -72,51 +85,37 @@ func decodeState(t *testing.T, rec *httptest.ResponseRecorder) gameState {
 	return s
 }
 
-func TestWords_AllFiveUppercaseLetters(t *testing.T) {
+func curriculum(i int) string { return words[i].Italian }
+
+func firstN(n int) []string {
+	ws := make([]string, n)
+	for i := range ws {
+		ws[i] = curriculum(i)
+	}
+	return ws
+}
+
+func TestWords_UppercaseAndUnique(t *testing.T) {
 	seen := map[string]bool{}
 	for _, v := range words {
-		if len(v.Word) != WordLength {
-			t.Errorf("%q is not %d letters", v.Word, WordLength)
-		}
-		for _, r := range v.Word {
-			if r < 'A' || r > 'Z' {
-				t.Errorf("%q contains non A-Z letter %q", v.Word, r)
+		for _, w := range []string{v.Italian, v.English} {
+			if w == "" {
+				t.Errorf("entry %+v has an empty side", v)
+			}
+			for _, r := range w {
+				if r < 'A' || r > 'Z' {
+					t.Errorf("%q contains non A-Z letter %q", w, r)
+				}
 			}
 		}
-		if v.Clue == "" {
-			t.Errorf("%q has no clue", v.Word)
+		if seen[v.Italian] {
+			t.Errorf("%q appears twice", v.Italian)
 		}
-		if seen[v.Word] {
-			t.Errorf("%q appears twice", v.Word)
-		}
-		seen[v.Word] = true
+		seen[v.Italian] = true
 	}
 }
 
-func TestScore(t *testing.T) {
-	cases := []struct {
-		word, guess string
-		want        []string
-	}{
-		{"FIORE", "FIORE", []string{"correct", "correct", "correct", "correct", "correct"}},
-		{"FIORE", "ZUCCA", []string{"absent", "absent", "absent", "absent", "absent"}},
-		// duplicate letters: only one S left after the two exact matches
-		{"SASSO", "SPOSA", []string{"correct", "absent", "present", "correct", "present"}},
-		// guessed letter repeated more often than it occurs in the word
-		{"AMORE", "EEEEE", []string{"absent", "absent", "absent", "absent", "correct"}},
-	}
-	for _, c := range cases {
-		got := score(c.word, c.guess)
-		for i := range c.want {
-			if got[i] != c.want[i] {
-				t.Errorf("score(%s, %s) = %v, want %v", c.word, c.guess, got, c.want)
-				break
-			}
-		}
-	}
-}
-
-func TestCurrentGame_CreatesOne(t *testing.T) {
+func TestCurrentGame_CreatesFirstCurriculumRound(t *testing.T) {
 	h := setupGames(t)
 
 	rec := httptest.NewRecorder()
@@ -126,161 +125,114 @@ func TestCurrentGame_CreatesOne(t *testing.T) {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 	s := decodeState(t, rec)
-	if s.ID == 0 || s.Status != "playing" || len(s.Guesses) != 0 {
-		t.Errorf("expected a fresh playing game, got %+v", s)
+	if s.ID == 0 || s.Status != "playing" || s.TriesLeft != MaxTries {
+		t.Errorf("expected a fresh playing round, got %+v", s)
 	}
-	if s.Word != "" {
-		t.Errorf("answer leaked in an unfinished game: %+v", s)
+	if len(s.Pairs) != WordsPerRound {
+		t.Fatalf("expected %d pairs, got %d", WordsPerRound, len(s.Pairs))
 	}
-	if s.Clue != words[0].Clue {
-		t.Errorf("expected the first curriculum clue %q, got %q", words[0].Clue, s.Clue)
+	for i, p := range s.Pairs {
+		if p.Italian != curriculum(i) {
+			t.Errorf("pair %d: expected %q, got %q", i, curriculum(i), p.Italian)
+		}
+		if len(p.English) != len(english[p.Italian]) {
+			t.Errorf("pair %d: expected %d blanks, got %d",
+				i, len(english[p.Italian]), len(p.English))
+		}
+		for _, l := range p.English {
+			if l != "" {
+				t.Errorf("letter leaked in a fresh round: %+v", p)
+			}
+		}
 	}
 }
 
-// finishGame records a completed round directly, for curriculum tests.
-func finishGame(t *testing.T, h *Games, user, word, status string) {
-	t.Helper()
-	if _, err := h.DB.Exec(
-		"INSERT INTO games (username, word, status) VALUES ($1, $2, $3)",
-		user, word, status); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestNextWord_CognatesFirstForNewUser(t *testing.T) {
+func TestGuess_HitRevealsEveryOccurrence(t *testing.T) {
 	h := setupGames(t)
+	startRound(t, h, "ann", testRound)
 
-	w, err := h.nextWord("ann")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if w != words[0].Word {
-		t.Errorf("expected the first curriculum word %q, got %q", words[0].Word, w)
-	}
-}
-
-func TestNextWord_AdvancesThroughCurriculum(t *testing.T) {
-	h := setupGames(t)
-	finishGame(t, h, "ann", words[0].Word, "won")
-	finishGame(t, h, "ann", words[1].Word, "won")
-
-	w, err := h.nextWord("ann")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if w != words[2].Word {
-		t.Errorf("expected %q, got %q", words[2].Word, w)
-	}
-}
-
-func TestNextWord_MissedWordComesBackAfterGap(t *testing.T) {
-	h := setupGames(t)
-	finishGame(t, h, "ann", words[0].Word, "lost")
-	for i := 1; i <= ReviewGap; i++ {
-		finishGame(t, h, "ann", words[i].Word, "won")
-	}
-
-	w, err := h.nextWord("ann")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if w != words[0].Word {
-		t.Errorf("expected the missed word %q to return, got %q", words[0].Word, w)
-	}
-}
-
-func TestNextWord_MissedWordNotDueYet(t *testing.T) {
-	h := setupGames(t)
-	finishGame(t, h, "ann", words[0].Word, "lost")
-	finishGame(t, h, "ann", words[1].Word, "won")
-
-	w, err := h.nextWord("ann")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if w != words[2].Word {
-		t.Errorf("expected the next unseen word %q, got %q", words[2].Word, w)
-	}
-}
-
-func TestCurrentGame_ScopedToUser(t *testing.T) {
-	h := setupGames(t)
-	annID := startGame(t, h, "ann", "FIORE")
-
-	rec := httptest.NewRecorder()
-	h.Current(rec, asUser("bob", "GET", "/game", ""))
-
-	s := decodeState(t, rec)
-	if s.ID == annID {
-		t.Errorf("bob got ann's game: %+v", s)
-	}
-}
-
-func TestGuess_Win(t *testing.T) {
-	h := setupGames(t)
-	startGame(t, h, "ann", "FIORE")
-
-	rec := guessWord(h, "ann", "fiore") // lowercase input is normalized
+	rec := guessLetter(h, "ann", "a") // lowercase input is normalized
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 	s := decodeState(t, rec)
-	if s.Status != "won" || s.Word != "FIORE" {
-		t.Errorf("expected a won game revealing the word, got %+v", s)
+	if s.TriesLeft != MaxTries || len(s.Wrong) != 0 {
+		t.Errorf("a hit must not cost a try: %+v", s)
 	}
-	if len(s.Guesses) != 1 || s.Guesses[0].Result[0] != "correct" {
-		t.Errorf("expected one all-correct guess, got %+v", s.Guesses)
+	// TRAIN -> _ _ A _ _ and PARK -> _ A _ _
+	if s.Pairs[0].English[2] != "A" || s.Pairs[4].English[1] != "A" {
+		t.Errorf("expected every A revealed, got %+v", s.Pairs)
 	}
-}
-
-func TestGuess_WrongKeepsPlaying(t *testing.T) {
-	h := setupGames(t)
-	startGame(t, h, "ann", "FIORE")
-
-	s := decodeState(t, guessWord(h, "ann", "ZUCCA"))
-
-	if s.Status != "playing" || len(s.Guesses) != 1 {
-		t.Errorf("expected game still playing with 1 guess, got %+v", s)
-	}
-	if s.Word != "" {
-		t.Errorf("answer leaked in an unfinished game: %+v", s)
+	if s.Pairs[0].English[0] != "" {
+		t.Errorf("unguessed letter revealed: %+v", s.Pairs[0])
 	}
 }
 
-func TestGuess_FiveWrongLoses(t *testing.T) {
+func TestGuess_MissCostsATry(t *testing.T) {
 	h := setupGames(t)
-	startGame(t, h, "ann", "FIORE")
+	startRound(t, h, "ann", testRound)
 
-	wrong := []string{"ZUCCA", "PIZZA", "GATTO", "AMORE", "LATTE"}
+	s := decodeState(t, guessLetter(h, "ann", "Z"))
+
+	if s.Status != "playing" || s.TriesLeft != MaxTries-1 {
+		t.Errorf("expected one try spent, got %+v", s)
+	}
+	if len(s.Wrong) != 1 || s.Wrong[0] != "Z" {
+		t.Errorf("expected Z recorded as wrong, got %+v", s.Wrong)
+	}
+}
+
+func TestGuess_FiveMissesLose(t *testing.T) {
+	h := setupGames(t)
+	startRound(t, h, "ann", testRound)
+
 	var last *httptest.ResponseRecorder
-	for _, w := range wrong {
-		last = guessWord(h, "ann", w)
+	for _, l := range []string{"Z", "Q", "J", "X", "V"} { // none occur in the round
+		last = guessLetter(h, "ann", l)
 	}
 
 	s := decodeState(t, last)
-	if s.Status != "lost" || s.Word != "FIORE" {
-		t.Errorf("expected a lost game revealing the word, got %+v", s)
+	if s.Status != "lost" || s.TriesLeft != 0 {
+		t.Errorf("expected a lost round, got %+v", s)
 	}
-	if len(s.Guesses) != MaxGuesses {
-		t.Errorf("expected %d guesses, got %d", MaxGuesses, len(s.Guesses))
-	}
-}
-
-func TestGuess_NotInWordList(t *testing.T) {
-	h := setupGames(t)
-	startGame(t, h, "ann", "FIORE")
-
-	if rec := guessWord(h, "ann", "QQQQQ"); rec.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", rec.Code)
+	// the answers are revealed on loss
+	if strings.Join(s.Pairs[0].English, "") != "TRAIN" {
+		t.Errorf("expected TRAIN revealed, got %+v", s.Pairs[0])
 	}
 }
 
-func TestGuess_WrongLength(t *testing.T) {
+func TestGuess_AllLettersWin(t *testing.T) {
 	h := setupGames(t)
-	startGame(t, h, "ann", "FIORE")
+	startRound(t, h, "ann", testRound)
 
-	for _, g := range []string{"", "AMO", "AMOREVOLE", "CAFFÈ"} {
+	var last *httptest.ResponseRecorder
+	// every distinct letter of TRAIN BANK MUSIC LION PARK
+	for _, l := range strings.Split("TRAINBKMUSCLOP", "") {
+		last = guessLetter(h, "ann", l)
+	}
+
+	s := decodeState(t, last)
+	if s.Status != "won" || s.TriesLeft != MaxTries {
+		t.Errorf("expected a clean win, got %+v", s)
+	}
+}
+
+func TestGuess_RepeatLetterRejected(t *testing.T) {
+	h := setupGames(t)
+	startRound(t, h, "ann", testRound)
+	guessLetter(h, "ann", "A")
+
+	if rec := guessLetter(h, "ann", "A"); rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for a repeated letter, got %d", rec.Code)
+	}
+}
+
+func TestGuess_InvalidInput(t *testing.T) {
+	h := setupGames(t)
+	startRound(t, h, "ann", testRound)
+
+	for _, g := range []string{"", "AB", "1", "È"} {
 		rec := httptest.NewRecorder()
 		h.Guess(rec, asUser("ann", "POST", "/game/guess", `{"guess":"`+g+`"}`))
 		if rec.Code != http.StatusBadRequest {
@@ -291,17 +243,16 @@ func TestGuess_WrongLength(t *testing.T) {
 
 func TestGuess_AfterGameOver(t *testing.T) {
 	h := setupGames(t)
-	startGame(t, h, "ann", "FIORE")
-	guessWord(h, "ann", "FIORE") // win it
+	finishRound(t, h, "ann", testRound, "won")
 
-	if rec := guessWord(h, "ann", "ZUCCA"); rec.Code != http.StatusConflict {
+	if rec := guessLetter(h, "ann", "A"); rec.Code != http.StatusConflict {
 		t.Errorf("expected 409, got %d", rec.Code)
 	}
 }
 
 func TestNewGame_WhilePlaying(t *testing.T) {
 	h := setupGames(t)
-	startGame(t, h, "ann", "FIORE")
+	startRound(t, h, "ann", testRound)
 
 	rec := httptest.NewRecorder()
 	h.New(rec, asUser("ann", "POST", "/game", ""))
@@ -311,19 +262,59 @@ func TestNewGame_WhilePlaying(t *testing.T) {
 	}
 }
 
-func TestNewGame_AfterFinished(t *testing.T) {
+func TestCurrentGame_ScopedToUser(t *testing.T) {
 	h := setupGames(t)
-	old := startGame(t, h, "ann", "FIORE")
-	guessWord(h, "ann", "FIORE") // win it
+	annID := startRound(t, h, "ann", testRound)
 
 	rec := httptest.NewRecorder()
-	h.New(rec, asUser("ann", "POST", "/game", ""))
+	h.Current(rec, asUser("bob", "GET", "/game", ""))
 
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d", rec.Code)
+	if s := decodeState(t, rec); s.ID == annID {
+		t.Errorf("bob got ann's round: %+v", s)
 	}
-	s := decodeState(t, rec)
-	if s.ID == old || s.Status != "playing" || len(s.Guesses) != 0 {
-		t.Errorf("expected a fresh game, got %+v", s)
+}
+
+func TestNextWords_AdvancesThroughCurriculum(t *testing.T) {
+	h := setupGames(t)
+	finishRound(t, h, "ann", firstN(5), "won")
+
+	ws, err := h.nextWords("ann")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{curriculum(5), curriculum(6), curriculum(7), curriculum(8), curriculum(9)}
+	if strings.Join(ws, ",") != strings.Join(want, ",") {
+		t.Errorf("expected %v, got %v", want, ws)
+	}
+}
+
+func TestNextWords_MissedRoundComesBackAfterGap(t *testing.T) {
+	h := setupGames(t)
+	finishRound(t, h, "ann", firstN(5), "lost")
+	for i := 0; i < ReviewGap; i++ {
+		finishRound(t, h, "ann", firstN(5*(i+2))[5*(i+1):], "won")
+	}
+
+	ws, err := h.nextWords("ann")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(ws, ",") != strings.Join(firstN(5), ",") {
+		t.Errorf("expected the missed words %v to return, got %v", firstN(5), ws)
+	}
+}
+
+func TestNextWords_MissedRoundNotDueYet(t *testing.T) {
+	h := setupGames(t)
+	finishRound(t, h, "ann", firstN(5), "lost")
+	finishRound(t, h, "ann", firstN(10)[5:], "won")
+
+	ws, err := h.nextWords("ann")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := firstN(15)[10:]
+	if strings.Join(ws, ",") != strings.Join(want, ",") {
+		t.Errorf("expected the next unseen words %v, got %v", want, ws)
 	}
 }

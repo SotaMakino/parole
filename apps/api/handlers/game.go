@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	WordLength = 5
-	MaxGuesses = 5
-	// a missed word returns once this many later rounds have been played
+	WordsPerRound = 5
+	MaxTries      = 5 // wrong letters allowed before the round is lost
+	// a missed round's words return once this many later rounds have been played
 	ReviewGap = 3
 )
 
@@ -20,157 +20,207 @@ type Games struct {
 	DB *sql.DB
 }
 
+// game rows store the round's Italian words comma-joined in the word column,
+// so the schema is the same as a single-word game.
 type game struct {
 	id     int64
-	word   string
+	words  []string
 	status string // playing | won | lost
 }
 
-type guessResult struct {
-	Word   string   `json:"word"`
-	Result []string `json:"result"` // per letter: correct | present | absent
+type pair struct {
+	Italian string   `json:"italian"`
+	English []string `json:"english"` // one entry per letter: revealed letter or ""
 }
 
 type gameState struct {
-	ID         int64         `json:"id"`
-	Status     string        `json:"status"`
-	Clue       string        `json:"clue"` // English meaning of the answer
-	Guesses    []guessResult `json:"guesses"`
-	MaxGuesses int           `json:"maxGuesses"`
-	WordLength int           `json:"wordLength"`
-	Word       string        `json:"word,omitempty"` // revealed only once the game is over
-}
-
-// score returns Wordle feedback for a guess: exact matches first, then
-// remaining letters claim "present" slots so duplicates are not over-counted.
-func score(word, guess string) []string {
-	result := make([]string, len(guess))
-	counts := map[byte]int{}
-	for i := 0; i < len(word); i++ {
-		if guess[i] == word[i] {
-			result[i] = "correct"
-		} else {
-			counts[word[i]]++
-		}
-	}
-	for i := 0; i < len(guess); i++ {
-		if result[i] != "" {
-			continue
-		}
-		if counts[guess[i]] > 0 {
-			result[i] = "present"
-			counts[guess[i]]--
-		} else {
-			result[i] = "absent"
-		}
-	}
-	return result
+	ID        int64    `json:"id"`
+	Status    string   `json:"status"`
+	Pairs     []pair   `json:"pairs"`
+	Guessed   []string `json:"guessed"` // every letter tried, in order
+	Wrong     []string `json:"wrong"`   // the tried letters that hit nothing
+	TriesLeft int      `json:"triesLeft"`
+	MaxTries  int      `json:"maxTries"`
 }
 
 func (h *Games) latest(user string) (*game, error) {
 	g := &game{}
+	var joined string
 	err := h.DB.QueryRow(
 		"SELECT id, word, status FROM games WHERE username = $1 ORDER BY id DESC LIMIT 1",
-		user).Scan(&g.id, &g.word, &g.status)
+		user).Scan(&g.id, &joined, &g.status)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
+	g.words = strings.Split(joined, ",")
 	return g, err
 }
 
-// nextWord picks the curriculum word for a user's next game. Priority:
-//  1. spaced repetition — a word the user lost at least ReviewGap finished
-//     rounds ago and has not won since (oldest miss first)
-//  2. the first word in curriculum order the user has never played
-//  3. the not-yet-won word played longest ago (losses not due yet)
-//  4. everything is won: recycle the word won longest ago
-func (h *Games) nextWord(user string) (string, error) {
+// history replays a user's finished rounds: every word of a round shares the
+// round's outcome, and later rounds overwrite earlier ones.
+type outcome struct {
+	round int // 1-based index of the user's finished rounds
+	won   bool
+}
+
+func (h *Games) history(user string) (map[string]outcome, int, error) {
 	rows, err := h.DB.Query(
 		"SELECT word, status FROM games WHERE username = $1 AND status <> 'playing' ORDER BY id",
 		user)
 	if err != nil {
-		return "", err
+		return nil, 0, err
 	}
 	defer rows.Close()
-	type outcome struct {
-		round int // 1-based index of the user's finished games
-		won   bool
-	}
 	last := map[string]outcome{}
 	round := 0
 	for rows.Next() {
-		var word, status string
-		if err := rows.Scan(&word, &status); err != nil {
-			return "", err
+		var joined, status string
+		if err := rows.Scan(&joined, &status); err != nil {
+			return nil, 0, err
 		}
 		round++
-		last[word] = outcome{round, status == "won"}
-	}
-	if err := rows.Err(); err != nil {
-		return "", err
-	}
-
-	pickOldest := func(match func(outcome) bool) string {
-		word, best := "", round+1
-		for _, v := range words {
-			if o, seen := last[v.Word]; seen && match(o) && o.round < best {
-				word, best = v.Word, o.round
-			}
-		}
-		return word
-	}
-
-	if w := pickOldest(func(o outcome) bool { return !o.won && round-o.round >= ReviewGap }); w != "" {
-		return w, nil
-	}
-	for _, v := range words {
-		if _, seen := last[v.Word]; !seen {
-			return v.Word, nil
+		for _, w := range strings.Split(joined, ",") {
+			last[w] = outcome{round, status == "won"}
 		}
 	}
-	if w := pickOldest(func(o outcome) bool { return !o.won }); w != "" {
-		return w, nil
-	}
-	return pickOldest(func(o outcome) bool { return true }), nil
+	return last, round, rows.Err()
 }
 
-func (h *Games) create(user string) (*game, error) {
-	word, err := h.nextWord(user)
+// nextWords picks a round's words in curriculum order. Priority:
+//  1. spaced repetition — words lost at least ReviewGap finished rounds ago
+//     and not won since (oldest miss first)
+//  2. words the user has never played, cognates first
+//  3. not-yet-won words played longest ago (losses not due yet)
+//  4. everything is won: recycle the words won longest ago
+func (h *Games) nextWords(user string) ([]string, error) {
+	last, round, err := h.history(user)
 	if err != nil {
 		return nil, err
 	}
-	g := &game{word: word, status: "playing"}
+
+	picked := []string{}
+	taken := map[string]bool{}
+	take := func(w string) {
+		if !taken[w] && len(picked) < WordsPerRound {
+			taken[w] = true
+			picked = append(picked, w)
+		}
+	}
+	// repeatedly take the oldest-round word matching, until none match
+	takeOldest := func(match func(outcome) bool) {
+		for len(picked) < WordsPerRound {
+			best, bestRound := "", round+1
+			for _, v := range words {
+				o, seen := last[v.Italian]
+				if seen && !taken[v.Italian] && match(o) && o.round < bestRound {
+					best, bestRound = v.Italian, o.round
+				}
+			}
+			if best == "" {
+				return
+			}
+			take(best)
+		}
+	}
+
+	takeOldest(func(o outcome) bool { return !o.won && round-o.round >= ReviewGap })
+	for _, v := range words {
+		if _, seen := last[v.Italian]; !seen {
+			take(v.Italian)
+		}
+	}
+	takeOldest(func(o outcome) bool { return !o.won })
+	takeOldest(func(o outcome) bool { return true })
+	return picked, nil
+}
+
+func (h *Games) create(user string) (*game, error) {
+	picked, err := h.nextWords(user)
+	if err != nil {
+		return nil, err
+	}
+	g := &game{words: picked, status: "playing"}
 	err = h.DB.QueryRow(
 		"INSERT INTO games (username, word, status) VALUES ($1, $2, 'playing') RETURNING id",
-		user, g.word).Scan(&g.id)
+		user, strings.Join(picked, ",")).Scan(&g.id)
 	return g, err
 }
 
-func (h *Games) state(g *game) (gameState, error) {
-	s := gameState{
-		ID:         g.id,
-		Status:     g.status,
-		Clue:       clues[g.word],
-		Guesses:    []guessResult{}, // non-nil so an empty list encodes as [], not null
-		MaxGuesses: MaxGuesses,
-		WordLength: WordLength,
-	}
+func (h *Games) guessed(g *game) ([]string, error) {
 	rows, err := h.DB.Query("SELECT guess FROM guesses WHERE game_id = $1 ORDER BY id", g.id)
 	if err != nil {
-		return s, err
+		return nil, err
 	}
 	defer rows.Close()
+	letters := []string{}
 	for rows.Next() {
-		var guess string
-		if err := rows.Scan(&guess); err != nil {
-			return s, err
+		var l string
+		if err := rows.Scan(&l); err != nil {
+			return nil, err
 		}
-		s.Guesses = append(s.Guesses, guessResult{Word: guess, Result: score(g.word, guess)})
+		letters = append(letters, l)
 	}
-	if g.status != "playing" {
-		s.Word = g.word
+	return letters, rows.Err()
+}
+
+// inAnyWord reports whether the letter occurs in any of the round's
+// English translations.
+func (g *game) inAnyWord(letter string) bool {
+	for _, w := range g.words {
+		if strings.Contains(english[w], letter) {
+			return true
+		}
 	}
-	return s, rows.Err()
+	return false
+}
+
+// solved reports whether every letter of every English word has been guessed.
+func (g *game) solved(guessedSet map[string]bool) bool {
+	for _, w := range g.words {
+		for _, r := range english[w] {
+			if !guessedSet[string(r)] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (h *Games) state(g *game) (gameState, error) {
+	letters, err := h.guessed(g)
+	if err != nil {
+		return gameState{}, err
+	}
+	guessedSet := map[string]bool{}
+	for _, l := range letters {
+		guessedSet[l] = true
+	}
+	s := gameState{
+		ID:       g.id,
+		Status:   g.status,
+		Pairs:    []pair{},
+		Guessed:  letters,
+		Wrong:    []string{},
+		MaxTries: MaxTries,
+	}
+	for _, l := range letters {
+		if !g.inAnyWord(l) {
+			s.Wrong = append(s.Wrong, l)
+		}
+	}
+	s.TriesLeft = MaxTries - len(s.Wrong)
+	for _, w := range g.words {
+		e := english[w]
+		revealed := make([]string, len(e))
+		for i, r := range e {
+			// a finished round shows everything
+			if guessedSet[string(r)] || g.status != "playing" {
+				revealed[i] = string(r)
+			}
+		}
+		s.Pairs = append(s.Pairs, pair{Italian: w, English: revealed})
+	}
+	return s, nil
 }
 
 func (h *Games) writeState(w http.ResponseWriter, code int, g *game) {
@@ -184,7 +234,7 @@ func (h *Games) writeState(w http.ResponseWriter, code int, g *game) {
 	json.NewEncoder(w).Encode(s)
 }
 
-// Current returns the user's latest game, starting one if they have none yet.
+// Current returns the user's latest round, starting one if they have none yet.
 func (h *Games) Current(w http.ResponseWriter, r *http.Request) {
 	user := middleware.Username(r)
 	g, err := h.latest(user)
@@ -201,7 +251,7 @@ func (h *Games) Current(w http.ResponseWriter, r *http.Request) {
 	h.writeState(w, http.StatusOK, g)
 }
 
-// New starts a fresh game once the current one is finished.
+// New starts a fresh round once the current one is finished.
 func (h *Games) New(w http.ResponseWriter, r *http.Request) {
 	user := middleware.Username(r)
 	g, err := h.latest(user)
@@ -221,7 +271,7 @@ func (h *Games) New(w http.ResponseWriter, r *http.Request) {
 	h.writeState(w, http.StatusCreated, g)
 }
 
-// Guess submits one guess for the current game.
+// Guess submits one letter for the current round.
 func (h *Games) Guess(w http.ResponseWriter, r *http.Request) {
 	user := middleware.Username(r)
 	var body struct {
@@ -231,15 +281,9 @@ func (h *Games) Guess(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
-	guess := strings.ToUpper(strings.TrimSpace(body.Guess))
-	if len(guess) != WordLength || strings.IndexFunc(guess, func(r rune) bool {
-		return r < 'A' || r > 'Z'
-	}) != -1 {
-		writeError(w, http.StatusBadRequest, "guess must be a 5-letter word")
-		return
-	}
-	if !wordSet[guess] {
-		writeError(w, http.StatusBadRequest, "not in the word list")
+	letter := strings.ToUpper(strings.TrimSpace(body.Guess))
+	if len(letter) != 1 || letter[0] < 'A' || letter[0] > 'Z' {
+		writeError(w, http.StatusBadRequest, "guess one letter (A-Z)")
 		return
 	}
 
@@ -253,23 +297,40 @@ func (h *Games) Guess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.DB.Exec(
-		"INSERT INTO guesses (game_id, guess) VALUES ($1, $2)", g.id, guess); err != nil {
-		writeError(w, http.StatusInternalServerError, "could not save guess")
-		return
-	}
-	var count int
-	if err := h.DB.QueryRow(
-		"SELECT count(*) FROM guesses WHERE game_id = $1", g.id).Scan(&count); err != nil {
+	letters, err := h.guessed(g)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, "query failed")
 		return
 	}
+	guessedSet := map[string]bool{}
+	wrong := 0
+	for _, l := range letters {
+		guessedSet[l] = true
+		if !g.inAnyWord(l) {
+			wrong++
+		}
+	}
+	if guessedSet[letter] {
+		writeError(w, http.StatusBadRequest, "letter already tried")
+		return
+	}
+
+	if _, err := h.DB.Exec(
+		"INSERT INTO guesses (game_id, guess) VALUES ($1, $2)", g.id, letter); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not save guess")
+		return
+	}
+	guessedSet[letter] = true
 
 	switch {
-	case guess == g.word:
-		g.status = "won"
-	case count >= MaxGuesses:
-		g.status = "lost"
+	case g.inAnyWord(letter):
+		if g.solved(guessedSet) {
+			g.status = "won"
+		}
+	default:
+		if wrong+1 >= MaxTries {
+			g.status = "lost"
+		}
 	}
 	if g.status != "playing" {
 		if _, err := h.DB.Exec("UPDATE games SET status = $1 WHERE id = $2", g.status, g.id); err != nil {

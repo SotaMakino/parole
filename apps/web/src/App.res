@@ -5,6 +5,7 @@ type guess = {word: string, result: array<string>}
 type game = {
   id: int,
   status: string, // "playing" | "won" | "lost"
+  clue: string, // English meaning of the answer
   guesses: array<guess>,
   maxGuesses: int,
   wordLength: int,
@@ -236,7 +237,9 @@ let make = () => {
       <header className="app-header">
         <div>
           <h1> {React.string("Parole")} </h1>
-          <p className="tagline"> {React.string("Guess the Italian word in 6 tries")} </p>
+          <p className="tagline">
+            {React.string("Read the English clue — type the Italian word in 5 tries")}
+          </p>
         </div>
         <button type_="button" className="ghost" onClick={_ => handleLogout()->ignore}>
           {React.string("Log out")}
@@ -281,6 +284,10 @@ let make = () => {
             m
           }
           <>
+            <div className="clue">
+              <span className="clue-label"> {React.string("English")} </span>
+              <span className="clue-text"> {React.string(g.clue)} </span>
+            </div>
             <div className="board" ariaLabel="Game board">
               {Belt.Array.concat(filled, empty)
               ->Belt.Array.mapWithIndex((ri, row) =>
@@ -303,8 +310,10 @@ let make = () => {
                   <p>
                     {React.string(
                       g.status == "won"
-                        ? "Bravo! You guessed it."
-                        : `The word was ${g.word->Belt.Option.getWithDefault("")}.`,
+                        ? `Bravo! ${g.word->Belt.Option.getWithDefault("")} means “${g.clue}”.`
+                        : `The word was ${g.word->Belt.Option.getWithDefault(
+                              "",
+                            )} — “${g.clue}”. It will come back for review.`,
                     )}
                   </p>
                   <button

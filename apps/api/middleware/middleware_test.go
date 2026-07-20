@@ -22,7 +22,7 @@ func setupDB(t *testing.T) *sql.DB {
 		t.Skipf("postgres unavailable: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	if _, err := db.Exec("TRUNCATE todos, accounts, sessions"); err != nil {
+	if _, err := db.Exec("TRUNCATE games, guesses, accounts, sessions"); err != nil {
 		t.Fatal(err)
 	}
 	return db
@@ -32,7 +32,7 @@ func authRequest(db *sql.DB, cookie *http.Cookie) *httptest.ResponseRecorder {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	req := httptest.NewRequest("GET", "/todos", nil)
+	req := httptest.NewRequest("GET", "/game", nil)
 	if cookie != nil {
 		req.AddCookie(cookie)
 	}

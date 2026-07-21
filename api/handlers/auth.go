@@ -63,7 +63,7 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true, // JS cannot read it — XSS protection
 		Secure:   true,
-		SameSite: http.SameSiteNoneMode, // cross-site: web and API live on different domains
+		SameSite: http.SameSiteLaxMode, // first-party: Pages proxies /api to this backend
 		MaxAge:   86400,
 	})
 	w.WriteHeader(http.StatusNoContent)
@@ -76,7 +76,7 @@ func (a *Auth) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: "session", Value: "", Path: "/",
-		HttpOnly: true, Secure: true, SameSite: http.SameSiteNoneMode,
+		HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
 		MaxAge: -1, // tells the browser: delete this cookie
 	})
 	w.WriteHeader(http.StatusNoContent)

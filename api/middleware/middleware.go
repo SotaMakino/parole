@@ -102,8 +102,8 @@ func Guest(next http.Handler) http.Handler {
 				Path:     "/",
 				HttpOnly: true,
 				Secure:   true,
-				SameSite: http.SameSiteNoneMode, // web and API live on different domains
-				MaxAge:   60 * 60 * 24 * 365,    // one year
+				SameSite: http.SameSiteLaxMode, // first-party: Pages proxies /api to this backend
+				MaxAge:   60 * 60 * 24 * 365,   // one year
 			})
 		}
 		ctx := WithAuth(WithUser(r.Context(), id), false)

@@ -25,10 +25,11 @@ type fetchOptions = {
 @val external fetch: (string, fetchOptions) => promise<response> = "fetch"
 @scope("JSON") @val external stringify: 'a => string = "stringify"
 
-let api =
-  (%raw(`import.meta.env.VITE_API_URL`): Js.Nullable.t<string>)
-  ->Js.Nullable.toOption
-  ->Belt.Option.getWithDefault("http://localhost:8080")
+// In production the app is served by Cloudflare Pages, which proxies /api/* to
+// the Render backend — so the browser only ever hits this one same-origin path
+// and the session cookie stays first-party. In dev, talk to the Go server direct.
+let isProd: bool = %raw(`import.meta.env.PROD`)
+let api = isProd ? "/api" : "http://localhost:8080"
 
 let timeoutMs = 8000
 

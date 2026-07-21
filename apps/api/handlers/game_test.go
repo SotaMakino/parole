@@ -267,6 +267,75 @@ func TestGuess_AfterGameOver(t *testing.T) {
 	}
 }
 
+func TestCurrentGame_RevisitResetsAnInProgressRound(t *testing.T) {
+	h := setupGames(t)
+	id := startRound(t, h, "ann", testRound)
+	guessLetter(h, "ann", "A")
+	guessLetter(h, "ann", "Z")
+
+	rec := httptest.NewRecorder()
+	h.Current(rec, asUser("ann", "GET", "/game", ""))
+
+	s := decodeState(t, rec)
+	if s.ID != id || s.Status != "playing" {
+		t.Errorf("expected the same round still playing, got %+v", s)
+	}
+	if len(s.Guessed) != 0 || len(s.Wrong) != 0 {
+		t.Errorf("expected a revisit to clear all guesses, got %+v", s)
+	}
+	for _, l := range s.Pairs[0].English {
+		if l != "" {
+			t.Errorf("expected all letters hidden again, got %+v", s.Pairs[0])
+		}
+	}
+}
+
+func TestCurrentGame_RevisitKeepsAFinishedRound(t *testing.T) {
+	h := setupGames(t)
+	startRound(t, h, "ann", testRound)
+	for _, l := range strings.Split("TRAINBKMUSCLOP", "") {
+		guessLetter(h, "ann", l)
+	}
+
+	rec := httptest.NewRecorder()
+	h.Current(rec, asUser("ann", "GET", "/game", ""))
+
+	s := decodeState(t, rec)
+	if s.Status != "won" || len(s.Guessed) == 0 {
+		t.Errorf("expected the finished round untouched, got %+v", s)
+	}
+}
+
+func TestReset_ClearsGuessesMidRound(t *testing.T) {
+	h := setupGames(t)
+	id := startRound(t, h, "ann", testRound)
+	guessLetter(h, "ann", "A")
+	guessLetter(h, "ann", "Z")
+
+	rec := httptest.NewRecorder()
+	h.Reset(rec, asUser("ann", "POST", "/game/reset", ""))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	s := decodeState(t, rec)
+	if s.ID != id || s.Status != "playing" || len(s.Guessed) != 0 {
+		t.Errorf("expected the same round wiped clean, got %+v", s)
+	}
+}
+
+func TestReset_AfterGameOver(t *testing.T) {
+	h := setupGames(t)
+	finishRound(t, h, "ann", testRound, "won")
+
+	rec := httptest.NewRecorder()
+	h.Reset(rec, asUser("ann", "POST", "/game/reset", ""))
+
+	if rec.Code != http.StatusConflict {
+		t.Errorf("expected 409, got %d", rec.Code)
+	}
+}
+
 func TestRetry_RepeatsTheSameWords(t *testing.T) {
 	h := setupGames(t)
 	old := startRound(t, h, "ann", testRound)

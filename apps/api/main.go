@@ -43,6 +43,7 @@ func main() {
 	game.HandleFunc("GET /game", h.Current)
 	game.HandleFunc("POST /game", h.New)
 	game.HandleFunc("POST /game/retry", h.Retry)
+	game.HandleFunc("POST /game/reset", h.Reset)
 	game.HandleFunc("POST /game/guess", h.Guess)
 	mux.Handle("/game", middleware.Auth(db, game))
 	mux.Handle("/game/", middleware.Auth(db, game))

@@ -238,7 +238,9 @@ func (h *Games) writeState(w http.ResponseWriter, code int, g *game) {
 	json.NewEncoder(w).Encode(s)
 }
 
-// Current returns the user's latest round, starting one if they have none yet.
+// Current returns the user's latest round, starting one if they have none
+// yet. Revisiting mid-round starts it over: an in-progress round's guesses
+// are wiped so the page always loads a clean board.
 func (h *Games) Current(w http.ResponseWriter, r *http.Request) {
 	user := middleware.Username(r)
 	g, err := h.latest(user)
@@ -246,9 +248,15 @@ func (h *Games) Current(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "query failed")
 		return
 	}
-	if g == nil {
+	switch {
+	case g == nil:
 		if g, err = h.create(user); err != nil {
 			writeError(w, http.StatusInternalServerError, "could not start a game")
+			return
+		}
+	case g.status == "playing":
+		if _, err := h.DB.Exec("DELETE FROM guesses WHERE game_id = $1", g.id); err != nil {
+			writeError(w, http.StatusInternalServerError, "could not reset the game")
 			return
 		}
 	}
@@ -273,6 +281,26 @@ func (h *Games) New(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.writeState(w, http.StatusCreated, g)
+}
+
+// Reset wipes the in-progress round's guesses so it starts over with the
+// same five words.
+func (h *Games) Reset(w http.ResponseWriter, r *http.Request) {
+	user := middleware.Username(r)
+	g, err := h.latest(user)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "query failed")
+		return
+	}
+	if g == nil || g.status != "playing" {
+		writeError(w, http.StatusConflict, "no game in progress")
+		return
+	}
+	if _, err := h.DB.Exec("DELETE FROM guesses WHERE game_id = $1", g.id); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not reset the game")
+		return
+	}
+	h.writeState(w, http.StatusOK, g)
 }
 
 // Retry restarts the just-finished round with the same five words.

@@ -341,7 +341,7 @@ func TestGuess_AfterGameOver(t *testing.T) {
 	}
 }
 
-func TestCurrentGame_RevisitResetsAnInProgressRound(t *testing.T) {
+func TestCurrentGame_RevisitDealsAFreshRound(t *testing.T) {
 	h := setupGames(t)
 	id := startRound(t, h, "ann", testRound)
 	place(h, "ann", "A", 0, 2)
@@ -351,15 +351,17 @@ func TestCurrentGame_RevisitResetsAnInProgressRound(t *testing.T) {
 	h.Current(rec, asUser("ann", "GET", "/game", ""))
 
 	s := decodeState(t, rec)
-	if s.ID != id || s.Status != "playing" {
-		t.Errorf("expected the same round still playing, got %+v", s)
+	if s.ID == id || s.Status != "playing" {
+		t.Errorf("expected a brand-new round, got %+v", s)
 	}
 	if len(s.Guessed) != 0 || len(s.Wrong) != 0 {
-		t.Errorf("expected a revisit to clear all guesses, got %+v", s)
+		t.Errorf("expected a fresh round with no guesses, got %+v", s)
 	}
-	for _, l := range s.Pairs[0].English {
-		if l != "" {
-			t.Errorf("expected all letters hidden again, got %+v", s.Pairs[0])
+	for _, p := range s.Pairs {
+		for _, l := range p.English {
+			if l != "" {
+				t.Errorf("letter leaked in a fresh round: %+v", p)
+			}
 		}
 	}
 }

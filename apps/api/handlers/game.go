@@ -285,9 +285,10 @@ func (h *Games) writeState(w http.ResponseWriter, code int, g *game) {
 	json.NewEncoder(w).Encode(s)
 }
 
-// Current returns the user's latest round, starting one if they have none
-// yet. Revisiting mid-round starts it over: an in-progress round's guesses
-// are wiped so the page always loads a clean board.
+// Current returns the user's latest finished round, or deals a fresh one.
+// Revisiting mid-round abandons it: every visit starts a new round with new
+// words. Abandoned rounds never reach the history, so their words stay in
+// the unseen pool.
 func (h *Games) Current(w http.ResponseWriter, r *http.Request) {
 	user := middleware.Username(r)
 	g, err := h.latest(user)
@@ -295,15 +296,9 @@ func (h *Games) Current(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "query failed")
 		return
 	}
-	switch {
-	case g == nil:
+	if g == nil || g.status == "playing" {
 		if g, err = h.create(user); err != nil {
 			writeError(w, http.StatusInternalServerError, "could not start a game")
-			return
-		}
-	case g.status == "playing":
-		if _, err := h.DB.Exec("DELETE FROM guesses WHERE game_id = $1", g.id); err != nil {
-			writeError(w, http.StatusInternalServerError, "could not reset the game")
 			return
 		}
 	}

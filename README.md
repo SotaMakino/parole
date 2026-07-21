@@ -60,9 +60,8 @@ Runs on http://localhost:8080. Environment variables:
 Endpoints: `POST /signup`, `POST /login`, `POST /logout` (public), and — with a
 session cookie, scoped to the logged-in user:
 
-- `GET /game` — current round: five Italian words with per-letter reveal
-  state for their English translations, plus every tried and missed letter
-  (starts a round if the user has none)
+- `GET /game` — the latest finished round, or a freshly dealt one: visiting
+  mid-round abandons it, so every visit brings five new words
 - `POST /game` — new round, once the current one is finished
 - `POST /game/retry` — replay the just-finished round's five words
 - `POST /game/guess` — place one letter on one tile as

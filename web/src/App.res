@@ -446,7 +446,7 @@ let make = () => {
   | Some(g) =>
     <main className="app">
       <header className="app-header">
-        <p className="masthead-kicker"> {React.string(tr.kicker)} </p>
+        <p className="masthead-kicker"> {React.string(I18n.kicker)} </p>
         {
           // the flags choose the guessing direction, so they lock once the
           // round is under way — you can only switch on a fresh board

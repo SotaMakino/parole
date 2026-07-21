@@ -1,7 +1,6 @@
 // All UI text in the two languages the masthead flags toggle between.
 // "Le Cinque" (the paper's name) is never translated.
 type t = {
-  kicker: string,
   connecting: string,
   retry: string,
   serverWeak: string,
@@ -33,8 +32,10 @@ type t = {
   haveAccountQ: string,
 }
 
+// the masthead kicker is the paper's own name — never translated, like "Le Cinque"
+let kicker = "Quotidiano di Vocabolario Italiano"
+
 let it: t = {
-  kicker: "Quotidiano di Vocabolario Italiano",
   connecting: "Connessione al server…",
   retry: "Riprova",
   serverWeak: "I nostri server fanno schifo. Riprova automatica tra 5 secondi.",
@@ -67,7 +68,6 @@ let it: t = {
 }
 
 let en: t = {
-  kicker: "Italian Vocabulary Daily",
   connecting: "Connecting to server…",
   retry: "Retry",
   serverWeak: "Our servers are shit-weak. It'll auto-retry in 5 seconds.",

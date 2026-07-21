@@ -7,7 +7,9 @@ type game = {
   status: string, // "playing" | "won" | "lost" ("lost" = flagged for review)
   pairs: array<pair>,
   guessed: array<string>,
+  results: array<bool>, // parallel to guessed: true = correct placement
   wrong: array<string>,
+  usedUp: array<string>, // letters whose every occurrence is on the board
 }
 
 // celebration fireworks: staggered bursts of randomized particles
@@ -143,22 +145,34 @@ let make = () => {
     None
   })
 
-  let submitLetter = async letter => {
+  let (selected, setSelected) = React.useState(() => "") // letter picked from the keyboard
+
+  // place one letter on one exact tile
+  let placeLetter = async (letter, wordIndex, position) => {
     switch game {
-    | Some(g) if g.status == "playing" && !busy => {
+    | Some(g) if g.status == "playing" && !busy && letter != "" => {
         setBusy(_ => true)
         setNotice(_ => "")
-        switch await ApiClient.request("/game/guess", ~method_="POST", ~body={"guess": letter}) {
+        switch await ApiClient.request(
+          "/game/guess",
+          ~method_="POST",
+          ~body={"guess": letter, "word": wordIndex, "position": position},
+        ) {
         | Ok(res) => {
             let updated: game = await ApiClient.json(res)
             setGame(_ => Some(updated))
+            // deselect a letter once its last tile is on the board
+            setSelected(s => updated.usedUp->Belt.Array.some(l => l == s) ? "" : s)
+            if updated.wrong->Belt.Array.length > g.wrong->Belt.Array.length {
+              setNotice(_ => `No ${letter} there — that costs a miss.`)
+            }
             if updated.status == "won" {
               celebrate()
             }
           }
         | Error(err) if err.status == 401 => setAuthed(_ => Some(false))
         | Error(err) if err.status == 400 || err.status == 409 =>
-          // the raw server hint ("letter already tried") reads better in a
+          // the raw server hint ("tile already revealed") reads better in a
           // game notice than the full "HTTP 400: …" string
           setNotice(_ => err.message->Js.String2.replaceByRe(%re("/^HTTP \d+: /"), ""))
         | Error(err) => setError(_ => `Failed to submit the letter: ${err.message}`)
@@ -186,9 +200,15 @@ let make = () => {
   let newGame = () => startRound("/game")
   let retryGame = () => startRound("/game/retry")
 
+  // a physical key press picks the letter up; clicking a tile drops it
   let handleKey = k => {
     if k->Js.String2.length == 1 && %re("/^[a-z]$/i")->Js.Re.test_(k) {
-      submitLetter(k->Js.String2.toUpperCase)->ignore
+      let letter = k->Js.String2.toUpperCase
+      switch game {
+      | Some(g) if g.status == "playing" && !(g.usedUp->Belt.Array.some(l => l == letter)) =>
+        setSelected(s => s == letter ? "" : letter)
+      | _ => ()
+      }
     }
   }
 
@@ -246,7 +266,7 @@ let make = () => {
           <h1> {React.string("Parole")} </h1>
           <p className="tagline">
             {React.string(
-              "Type, tap, or drag letters to reveal the English word for each Italian one",
+              "Pick a letter and place it on its exact spot — drag it, or tap the letter then the tile",
             )}
           </p>
         </div>
@@ -259,28 +279,27 @@ let make = () => {
       | None => React.null
       | Some(g) =>
         <>
-          <div
-            className="pairs"
-            onDragOver={e => ReactEvent.Mouse.preventDefault(e)}
-            onDrop={e => {
-              ReactEvent.Mouse.preventDefault(e)
-              switch dragged.current {
-              | "" => ()
-              | l => {
-                  dragged.current = ""
-                  submitLetter(l)->ignore
-                }
-              }
-            }}>
+          <div className="pairs">
             {g.pairs
-            ->Belt.Array.map(p =>
+            ->Belt.Array.mapWithIndex((wi, p) =>
               <div key=p.italian className="pair-row">
                 <span className="italian"> {React.string(p.italian)} </span>
                 <div className="english-tiles">
                   {p.english
                   ->Belt.Array.mapWithIndex((i, letter) =>
                     letter == ""
-                      ? <div key={i->Belt.Int.toString} className="tile" />
+                      ? <div
+                          key={i->Belt.Int.toString}
+                          className="tile open"
+                          onDragOver={e => ReactEvent.Mouse.preventDefault(e)}
+                          onDrop={e => {
+                            ReactEvent.Mouse.preventDefault(e)
+                            let l = dragged.current
+                            dragged.current = ""
+                            placeLetter(l, wi, i)->ignore
+                          }}
+                          onClick={_ => placeLetter(selected, wi, i)->ignore}
+                        />
                       : <div
                           key={i->Belt.Int.toString}
                           className="tile revealed"
@@ -302,10 +321,15 @@ let make = () => {
             {g.guessed->Belt.Array.length == 0
               ? <span className="typed-empty"> {React.string("no letters yet")} </span>
               : g.guessed
-                ->Belt.Array.map(l =>
-                  g.wrong->Belt.Array.some(w => w == l)
-                    ? <span key=l className="chip miss"> {React.string(l)} </span>
-                    : <span key=l className="chip hit" style={{backgroundColor: colorFor(l)}}>
+                ->Belt.Array.mapWithIndex((i, l) =>
+                  g.results->Belt.Array.get(i)->Belt.Option.getWithDefault(false)
+                    ? <span
+                        key={i->Belt.Int.toString}
+                        className="chip hit"
+                        style={{backgroundColor: colorFor(l)}}>
+                        {React.string(l)}
+                      </span>
+                    : <span key={i->Belt.Int.toString} className="chip miss">
                         {React.string(l)}
                       </span>
                 )
@@ -317,25 +341,24 @@ let make = () => {
               <div key={ri->Belt.Int.toString} className="kb-row">
                 {row
                 ->Belt.Array.map(letter => {
-                  let tried = g.guessed->Belt.Array.some(l => l == letter)
-                  let missed = g.wrong->Belt.Array.some(l => l == letter)
-                  // a hit "moves" to the board: its key leaves the keyboard
-                  let cls = switch (tried, missed) {
-                  | (true, true) => "key absent"
-                  | (true, false) => "key used"
+                  // a fully placed letter leaves the keyboard for the board
+                  let usedUp = g.usedUp->Belt.Array.some(l => l == letter)
+                  let cls = switch (usedUp, selected == letter) {
+                  | (true, _) => "key used"
+                  | (false, true) => "key selected"
                   | _ => "key"
                   }
                   <button
                     key=letter
                     type_="button"
                     className=cls
-                    disabled=tried
-                    draggable={!tried && g.status == "playing"}
+                    disabled=usedUp
+                    draggable={!usedUp && g.status == "playing"}
                     onDragStart={e => {
                       e->dataTransfer->setData("text/plain", letter)
                       dragged.current = letter
                     }}
-                    onClick={_ => submitLetter(letter)->ignore}>
+                    onClick={_ => setSelected(s => s == letter ? "" : letter)}>
                     {React.string(letter)}
                   </button>
                 })

@@ -3,8 +3,11 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"math/rand/v2"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 
 	"example.com/parole/middleware"
@@ -40,8 +43,10 @@ type gameState struct {
 	ID      int64    `json:"id"`
 	Status  string   `json:"status"` // "lost" = completed, flagged for review
 	Pairs   []pair   `json:"pairs"`
-	Guessed []string `json:"guessed"` // every letter tried, in order
-	Wrong   []string `json:"wrong"`   // the tried letters that hit nothing
+	Guessed []string `json:"guessed"` // the letter of every placement tried, in order
+	Results []bool   `json:"results"` // parallel to guessed: true = correct placement
+	Wrong   []string `json:"wrong"`   // the letters of failed placements, in order
+	UsedUp  []string `json:"usedUp"`  // letters whose every occurrence is revealed
 }
 
 func (h *Games) latest(user string) (*game, error) {
@@ -152,78 +157,111 @@ func (h *Games) create(user string) (*game, error) {
 	return g, err
 }
 
-func (h *Games) guessed(g *game) ([]string, error) {
+// attempt is one letter placed on one tile, stored in guesses.guess as
+// "L:word:pos" — e.g. "T:0:3" puts a T on the fourth tile of the first word.
+type attempt struct {
+	letter string
+	word   int
+	pos    int
+}
+
+func (a attempt) encode() string {
+	return fmt.Sprintf("%s:%d:%d", a.letter, a.word, a.pos)
+}
+
+func decodeAttempt(s string) attempt {
+	parts := strings.SplitN(s, ":", 3)
+	if len(parts) != 3 {
+		return attempt{word: -1, pos: -1}
+	}
+	w, _ := strconv.Atoi(parts[1])
+	p, _ := strconv.Atoi(parts[2])
+	return attempt{letter: parts[0], word: w, pos: p}
+}
+
+// correct reports whether the attempt's letter really sits on that tile.
+func (g *game) correct(a attempt) bool {
+	if a.word < 0 || a.word >= len(g.words) {
+		return false
+	}
+	e := english[g.words[a.word]]
+	return a.pos >= 0 && a.pos < len(e) && string(e[a.pos]) == a.letter
+}
+
+func (h *Games) attempts(g *game) ([]attempt, error) {
 	rows, err := h.DB.Query("SELECT guess FROM guesses WHERE game_id = $1 ORDER BY id", g.id)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	letters := []string{}
+	attempts := []attempt{}
 	for rows.Next() {
-		var l string
-		if err := rows.Scan(&l); err != nil {
+		var s string
+		if err := rows.Scan(&s); err != nil {
 			return nil, err
 		}
-		letters = append(letters, l)
+		attempts = append(attempts, decodeAttempt(s))
 	}
-	return letters, rows.Err()
+	return attempts, rows.Err()
 }
 
-// inAnyWord reports whether the letter occurs in any of the round's
-// English translations.
-func (g *game) inAnyWord(letter string) bool {
-	for _, w := range g.words {
-		if strings.Contains(english[w], letter) {
-			return true
-		}
-	}
-	return false
-}
+type tileKey struct{ word, pos int }
 
-// solved reports whether every letter of every English word has been guessed.
-func (g *game) solved(guessedSet map[string]bool) bool {
-	for _, w := range g.words {
-		for _, r := range english[w] {
-			if !guessedSet[string(r)] {
-				return false
-			}
+func revealedTiles(g *game, attempts []attempt) map[tileKey]bool {
+	revealed := map[tileKey]bool{}
+	for _, a := range attempts {
+		if g.correct(a) {
+			revealed[tileKey{a.word, a.pos}] = true
 		}
 	}
-	return true
+	return revealed
 }
 
 func (h *Games) state(g *game) (gameState, error) {
-	letters, err := h.guessed(g)
+	attempts, err := h.attempts(g)
 	if err != nil {
 		return gameState{}, err
-	}
-	guessedSet := map[string]bool{}
-	for _, l := range letters {
-		guessedSet[l] = true
 	}
 	s := gameState{
 		ID:      g.id,
 		Status:  g.status,
 		Pairs:   []pair{},
-		Guessed: letters,
+		Guessed: []string{},
+		Results: []bool{},
 		Wrong:   []string{},
+		UsedUp:  []string{},
 	}
-	for _, l := range letters {
-		if !g.inAnyWord(l) {
-			s.Wrong = append(s.Wrong, l)
+	revealed := revealedTiles(g, attempts)
+	for _, a := range attempts {
+		s.Guessed = append(s.Guessed, a.letter)
+		s.Results = append(s.Results, g.correct(a))
+		if !g.correct(a) {
+			s.Wrong = append(s.Wrong, a.letter)
 		}
 	}
-	for _, w := range g.words {
+	counts := map[string]int{} // occurrences of each letter in the round
+	found := map[string]int{}  // revealed occurrences of each letter
+	for wi, w := range g.words {
 		e := english[w]
-		revealed := make([]string, len(e))
+		out := make([]string, len(e))
 		for i, r := range e {
+			counts[string(r)]++
+			if revealed[tileKey{wi, i}] {
+				found[string(r)]++
+			}
 			// a finished round shows everything
-			if guessedSet[string(r)] || g.status != "playing" {
-				revealed[i] = string(r)
+			if revealed[tileKey{wi, i}] || g.status != "playing" {
+				out[i] = string(r)
 			}
 		}
-		s.Pairs = append(s.Pairs, pair{Italian: w, English: revealed})
+		s.Pairs = append(s.Pairs, pair{Italian: w, English: out})
 	}
+	for l, c := range counts {
+		if found[l] == c {
+			s.UsedUp = append(s.UsedUp, l)
+		}
+	}
+	sort.Strings(s.UsedUp)
 	return s, nil
 }
 
@@ -325,11 +363,13 @@ func (h *Games) Retry(w http.ResponseWriter, r *http.Request) {
 	h.writeState(w, http.StatusCreated, fresh)
 }
 
-// Guess submits one letter for the current round.
+// Guess places one letter on one tile of the current round.
 func (h *Games) Guess(w http.ResponseWriter, r *http.Request) {
 	user := middleware.Username(r)
 	var body struct {
-		Guess string `json:"guess"`
+		Guess    string `json:"guess"`
+		Word     int    `json:"word"`     // 0-based pair index
+		Position int    `json:"position"` // 0-based tile index within the word
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON")
@@ -350,38 +390,52 @@ func (h *Games) Guess(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "no game in progress")
 		return
 	}
+	if body.Word < 0 || body.Word >= len(g.words) ||
+		body.Position < 0 || body.Position >= len(english[g.words[body.Word]]) {
+		writeError(w, http.StatusBadRequest, "no such tile")
+		return
+	}
+	a := attempt{letter: letter, word: body.Word, pos: body.Position}
 
-	letters, err := h.guessed(g)
+	attempts, err := h.attempts(g)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "query failed")
 		return
 	}
-	guessedSet := map[string]bool{}
+	revealed := revealedTiles(g, attempts)
+	if revealed[tileKey{a.word, a.pos}] {
+		writeError(w, http.StatusBadRequest, "tile already revealed")
+		return
+	}
 	wrong := 0
-	for _, l := range letters {
-		guessedSet[l] = true
-		if !g.inAnyWord(l) {
+	for _, prev := range attempts {
+		if !g.correct(prev) {
 			wrong++
 		}
-	}
-	if guessedSet[letter] {
-		writeError(w, http.StatusBadRequest, "letter already tried")
-		return
+		if prev == a {
+			writeError(w, http.StatusBadRequest, "already tried that letter there")
+			return
+		}
 	}
 
 	if _, err := h.DB.Exec(
-		"INSERT INTO guesses (game_id, guess) VALUES ($1, $2)", g.id, letter); err != nil {
+		"INSERT INTO guesses (game_id, guess) VALUES ($1, $2)", g.id, a.encode()); err != nil {
 		writeError(w, http.StatusInternalServerError, "could not save guess")
 		return
 	}
-	guessedSet[letter] = true
 
-	if !g.inAnyWord(letter) {
+	if g.correct(a) {
+		revealed[tileKey{a.word, a.pos}] = true
+	} else {
 		wrong++
 	}
-	// misses never end the round; the outcome is decided once everything is
+	// misses never end the round; the outcome is decided once every tile is
 	// revealed — too many misses flags the words for review
-	if g.solved(guessedSet) {
+	total := 0
+	for _, w := range g.words {
+		total += len(english[w])
+	}
+	if len(revealed) == total {
 		if wrong > ReviewMisses {
 			g.status = "lost"
 		} else {

@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -70,10 +71,24 @@ func finishRound(t *testing.T, h *Games, user string, ws []string, status string
 	}
 }
 
-func guessLetter(h *Games, user, letter string) *httptest.ResponseRecorder {
+// place attempts one letter on one tile.
+func place(h *Games, user, letter string, word, pos int) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
-	h.Guess(rec, asUser(user, "POST", "/game/guess", `{"guess":"`+letter+`"}`))
+	body := fmt.Sprintf(`{"guess":%q,"word":%d,"position":%d}`, letter, word, pos)
+	h.Guess(rec, asUser(user, "POST", "/game/guess", body))
 	return rec
+}
+
+// solveRound places every letter of every word on its correct tile.
+func solveRound(h *Games, user string, ws []string) *httptest.ResponseRecorder {
+	var last *httptest.ResponseRecorder
+	for wi, w := range ws {
+		e := english[w]
+		for i := 0; i < len(e); i++ {
+			last = place(h, user, string(e[i]), wi, i)
+		}
+	}
+	return last
 }
 
 func decodeState(t *testing.T, rec *httptest.ResponseRecorder) gameState {
@@ -155,61 +170,80 @@ func TestCurrentGame_CreatesRandomRound(t *testing.T) {
 	}
 }
 
-func TestGuess_HitRevealsEveryOccurrence(t *testing.T) {
+func TestGuess_CorrectPlacementRevealsOnlyThatTile(t *testing.T) {
 	h := setupGames(t)
 	startRound(t, h, "ann", testRound)
 
-	rec := guessLetter(h, "ann", "a") // lowercase input is normalized
+	rec := place(h, "ann", "a", 0, 2) // lowercase input is normalized; TRAIN has A at 2
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 	s := decodeState(t, rec)
 	if len(s.Wrong) != 0 {
-		t.Errorf("a hit must not count as a miss: %+v", s)
+		t.Errorf("a correct placement must not count as a miss: %+v", s)
 	}
-	// TRAIN -> _ _ A _ _ and PARK -> _ A _ _
-	if s.Pairs[0].English[2] != "A" || s.Pairs[4].English[1] != "A" {
-		t.Errorf("expected every A revealed, got %+v", s.Pairs)
+	if s.Pairs[0].English[2] != "A" {
+		t.Errorf("expected the placed tile revealed, got %+v", s.Pairs[0])
 	}
-	if s.Pairs[0].English[0] != "" {
-		t.Errorf("unguessed letter revealed: %+v", s.Pairs[0])
+	// the A in BANK and PARK must stay hidden — position matters now
+	if s.Pairs[1].English[1] != "" || s.Pairs[4].English[1] != "" {
+		t.Errorf("other occurrences must stay hidden, got %+v", s.Pairs)
 	}
 }
 
-func TestGuess_MissIsRecordedButNeverEndsTheRound(t *testing.T) {
+func TestGuess_WrongTileIsAMiss(t *testing.T) {
+	h := setupGames(t)
+	startRound(t, h, "ann", testRound)
+
+	// A exists in TRAIN, but not at position 0
+	s := decodeState(t, place(h, "ann", "A", 0, 0))
+
+	if s.Status != "playing" {
+		t.Errorf("a miss must not end the round, got %+v", s)
+	}
+	if len(s.Wrong) != 1 || s.Wrong[0] != "A" {
+		t.Errorf("expected one recorded miss, got %+v", s.Wrong)
+	}
+	if s.Pairs[0].English[2] != "" {
+		t.Errorf("a wrong placement must not reveal anything, got %+v", s.Pairs[0])
+	}
+}
+
+func TestGuess_MissesNeverEndTheRound(t *testing.T) {
 	h := setupGames(t)
 	startRound(t, h, "ann", testRound)
 
 	var last *httptest.ResponseRecorder
-	// far more misses than the review threshold — the round must keep going
-	for _, l := range []string{"Z", "Q", "J", "X", "V", "W", "F", "G", "D", "E"} {
-		last = guessLetter(h, "ann", l)
+	// Z occurs nowhere in the round: ten misses on ten different tiles
+	for i := 0; i < 5; i++ {
+		last = place(h, "ann", "Z", 0, i)
 	}
+	for i := 0; i < 4; i++ {
+		last = place(h, "ann", "Z", 1, i)
+	}
+	last = place(h, "ann", "Z", 2, 0)
 
 	s := decodeState(t, last)
 	if s.Status != "playing" {
 		t.Errorf("misses must never end the round, got %+v", s)
 	}
-	// none of the ten letters occur in TRAIN BANK MUSIC LION PARK
-	if len(s.Wrong) != 10 || s.Wrong[0] != "Z" {
+	if len(s.Wrong) != 10 {
 		t.Errorf("expected ten recorded misses, got %+v", s.Wrong)
 	}
 }
 
-func TestGuess_AllLettersWin(t *testing.T) {
+func TestGuess_FillingEveryTileWins(t *testing.T) {
 	h := setupGames(t)
 	startRound(t, h, "ann", testRound)
 
-	var last *httptest.ResponseRecorder
-	// every distinct letter of TRAIN BANK MUSIC LION PARK
-	for _, l := range strings.Split("TRAINBKMUSCLOP", "") {
-		last = guessLetter(h, "ann", l)
-	}
+	s := decodeState(t, solveRound(h, "ann", testRound))
 
-	s := decodeState(t, last)
 	if s.Status != "won" || len(s.Wrong) != 0 {
 		t.Errorf("expected a clean win, got %+v", s)
+	}
+	if strings.Join(s.Pairs[0].English, "") != "TRAIN" {
+		t.Errorf("expected TRAIN fully revealed, got %+v", s.Pairs[0])
 	}
 }
 
@@ -218,30 +252,62 @@ func TestGuess_ManyMissesFlagsForReview(t *testing.T) {
 	startRound(t, h, "ann", testRound)
 
 	// six misses — one over the review threshold
-	for _, l := range []string{"Z", "Q", "J", "X", "V", "W"} {
-		guessLetter(h, "ann", l)
+	for i := 0; i < 5; i++ {
+		place(h, "ann", "Z", 0, i)
 	}
-	var last *httptest.ResponseRecorder
-	for _, l := range strings.Split("TRAINBKMUSCLOP", "") {
-		last = guessLetter(h, "ann", l)
-	}
+	place(h, "ann", "Z", 1, 0)
+	s := decodeState(t, solveRound(h, "ann", testRound))
 
-	s := decodeState(t, last)
 	if s.Status != "lost" {
 		t.Errorf("expected the round flagged for review, got %+v", s)
 	}
-	if strings.Join(s.Pairs[0].English, "") != "TRAIN" {
-		t.Errorf("expected TRAIN fully revealed, got %+v", s.Pairs[0])
+}
+
+func TestGuess_UsedUpListsFullyPlacedLetters(t *testing.T) {
+	h := setupGames(t)
+	startRound(t, h, "ann", testRound)
+
+	// place one of the three A tiles: A is not used up yet
+	s := decodeState(t, place(h, "ann", "A", 0, 2))
+	for _, l := range s.UsedUp {
+		if l == "A" {
+			t.Errorf("A still has hidden tiles and must not be used up: %+v", s.UsedUp)
+		}
+	}
+
+	// place the remaining A tiles (BANK and PARK)
+	place(h, "ann", "A", 1, 1)
+	s = decodeState(t, place(h, "ann", "A", 4, 1))
+	found := false
+	for _, l := range s.UsedUp {
+		found = found || l == "A"
+	}
+	if !found {
+		t.Errorf("every A is revealed, expected it used up: %+v", s.UsedUp)
 	}
 }
 
-func TestGuess_RepeatLetterRejected(t *testing.T) {
+func TestGuess_RevealedTileRejected(t *testing.T) {
 	h := setupGames(t)
 	startRound(t, h, "ann", testRound)
-	guessLetter(h, "ann", "A")
+	place(h, "ann", "A", 0, 2)
 
-	if rec := guessLetter(h, "ann", "A"); rec.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for a repeated letter, got %d", rec.Code)
+	if rec := place(h, "ann", "X", 0, 2); rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for a revealed tile, got %d", rec.Code)
+	}
+}
+
+func TestGuess_RepeatedMissRejected(t *testing.T) {
+	h := setupGames(t)
+	startRound(t, h, "ann", testRound)
+	place(h, "ann", "Z", 0, 0)
+
+	if rec := place(h, "ann", "Z", 0, 0); rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for the same miss twice, got %d", rec.Code)
+	}
+	// a different letter on that tile is a fresh attempt
+	if rec := place(h, "ann", "Q", 0, 0); rec.Code != http.StatusOK {
+		t.Errorf("expected 200 for a new letter on the tile, got %d", rec.Code)
 	}
 }
 
@@ -250,10 +316,15 @@ func TestGuess_InvalidInput(t *testing.T) {
 	startRound(t, h, "ann", testRound)
 
 	for _, g := range []string{"", "AB", "1", "È"} {
-		rec := httptest.NewRecorder()
-		h.Guess(rec, asUser("ann", "POST", "/game/guess", `{"guess":"`+g+`"}`))
+		rec := place(h, "ann", g, 0, 0)
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("guess %q: expected 400, got %d", g, rec.Code)
+		}
+	}
+	for _, tile := range [][2]int{{-1, 0}, {5, 0}, {0, -1}, {0, 5}} {
+		rec := place(h, "ann", "A", tile[0], tile[1])
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("tile %v: expected 400, got %d", tile, rec.Code)
 		}
 	}
 }
@@ -262,7 +333,7 @@ func TestGuess_AfterGameOver(t *testing.T) {
 	h := setupGames(t)
 	finishRound(t, h, "ann", testRound, "won")
 
-	if rec := guessLetter(h, "ann", "A"); rec.Code != http.StatusConflict {
+	if rec := place(h, "ann", "A", 0, 2); rec.Code != http.StatusConflict {
 		t.Errorf("expected 409, got %d", rec.Code)
 	}
 }
@@ -270,8 +341,8 @@ func TestGuess_AfterGameOver(t *testing.T) {
 func TestCurrentGame_RevisitResetsAnInProgressRound(t *testing.T) {
 	h := setupGames(t)
 	id := startRound(t, h, "ann", testRound)
-	guessLetter(h, "ann", "A")
-	guessLetter(h, "ann", "Z")
+	place(h, "ann", "A", 0, 2)
+	place(h, "ann", "Z", 0, 0)
 
 	rec := httptest.NewRecorder()
 	h.Current(rec, asUser("ann", "GET", "/game", ""))
@@ -293,9 +364,7 @@ func TestCurrentGame_RevisitResetsAnInProgressRound(t *testing.T) {
 func TestCurrentGame_RevisitKeepsAFinishedRound(t *testing.T) {
 	h := setupGames(t)
 	startRound(t, h, "ann", testRound)
-	for _, l := range strings.Split("TRAINBKMUSCLOP", "") {
-		guessLetter(h, "ann", l)
-	}
+	solveRound(h, "ann", testRound)
 
 	rec := httptest.NewRecorder()
 	h.Current(rec, asUser("ann", "GET", "/game", ""))
@@ -309,8 +378,8 @@ func TestCurrentGame_RevisitKeepsAFinishedRound(t *testing.T) {
 func TestReset_ClearsGuessesMidRound(t *testing.T) {
 	h := setupGames(t)
 	id := startRound(t, h, "ann", testRound)
-	guessLetter(h, "ann", "A")
-	guessLetter(h, "ann", "Z")
+	place(h, "ann", "A", 0, 2)
+	place(h, "ann", "Z", 0, 0)
 
 	rec := httptest.NewRecorder()
 	h.Reset(rec, asUser("ann", "POST", "/game/reset", ""))

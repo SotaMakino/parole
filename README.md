@@ -3,11 +3,12 @@
 Bun monorepo: **Parole**, a letter-reveal trainer for beginner Italian
 vocabulary, built as a Go REST API plus a Vite + ReScript (React) client. Each
 round shows five Italian words on the left with their English translations
-hidden on the right — only the word lengths are visible. Type a letter (or tap
-the on-screen keyboard): if it occurs anywhere in the English words, every
-occurrence is revealed at once; misses are unlimited but each one is recorded.
-Finish with more than five misses and the round's words are flagged to come
-back for review — or hit Retry to play the same five again right away.
+hidden on the right — only the word lengths are visible. Drag a keyboard key
+onto the exact tile where you think that letter goes (or tap the key, then the
+tile): a correct placement fills that tile, a wrong one is a recorded miss.
+Misses are unlimited; finish with more than five and the round's words are
+flagged to come back for review — or hit Retry to play the same five again. A
+key disappears from the keyboard once every occurrence of its letter is placed.
 
 It leans on research-backed techniques: retrieval practice (you recall the
 English from the Italian), immediate feedback, and spaced repetition (flagged
@@ -63,10 +64,10 @@ session cookie, scoped to the logged-in user:
   (starts a round if the user has none)
 - `POST /game` — new round, once the current one is finished
 - `POST /game/retry` — replay the just-finished round's five words
-- `POST /game/guess` — submit one letter as `{"guess": "a"}`; a hit reveals
-  every occurrence across all five words, misses are recorded (more than
-  five flags the round for review), and the full answers appear only when
-  the round ends
+- `POST /game/guess` — place one letter on one tile as
+  `{"guess": "a", "word": 0, "position": 2}`; a correct placement reveals
+  that tile, a wrong one is a recorded miss (more than five flags the round
+  for review), and the full answers appear only when the round ends
 
 The word pool (800+ Italian words with English translations) lives in
 `apps/api/handlers/words.go`. New rounds pick five words server-side: words

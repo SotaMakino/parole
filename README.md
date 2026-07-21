@@ -65,6 +65,8 @@ session cookie, scoped to the logged-in user:
 - `GET /game` — the latest finished round, or a freshly dealt one: visiting
   mid-round abandons it, so every visit brings five new words
 - `POST /game` — new round, once the current one is finished
+- `GET /me` — the signed-in username and how many distinct words they have
+  learned (a word counts once it appears in any won round)
 - `POST /game/retry` — replay the just-finished round's five words
 - `POST /game/guess` — place one letter on one tile as
   `{"guess": "a", "word": 0, "position": 2}`; a correct placement reveals

@@ -286,6 +286,23 @@ func (h *Games) writeState(w http.ResponseWriter, code int, g *game) {
 	json.NewEncoder(w).Encode(s)
 }
 
+// Me returns the signed-in user's name and how many distinct words they have
+// learned — a word counts as learned once it appears in any won round.
+func (h *Games) Me(w http.ResponseWriter, r *http.Request) {
+	user := middleware.Username(r)
+	var learned int
+	err := h.DB.QueryRow(`SELECT COUNT(DISTINCT w) FROM (
+		SELECT unnest(string_to_array(word, ',')) AS w
+		FROM games WHERE username = $1 AND status = 'won'
+	) t`, user).Scan(&learned)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "query failed")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"username": user, "learned": learned})
+}
+
 // Current returns the user's latest finished round, or deals a fresh one.
 // Revisiting mid-round abandons it: every visit starts a new round with new
 // words. Abandoned rounds never reach the history, so their words stay in

@@ -2,6 +2,8 @@
 
 type pair = {italian: string, english: array<string>} // "" = still hidden
 
+type me = {username: string, learned: int}
+
 type game = {
   id: int,
   status: string, // "playing" | "won" | "lost" ("lost" = flagged for review)
@@ -108,6 +110,8 @@ let make = () => {
   let (notice, setNotice) = React.useState(() => "") // rejected letter, transient
   let (busy, setBusy) = React.useState(() => false)
   let (bursts, setBursts) = React.useState(() => [])
+  let (account, setAccount) = React.useState(() => None) // fetched user + learned count
+  let (menuOpen, setMenuOpen) = React.useState(() => false)
 
   let celebrate = () => {
     let x = innerWidth / 2
@@ -131,6 +135,15 @@ let make = () => {
     fire(70, -65, 0.9, 340, 2)
   }
 
+  let loadAccount = async () =>
+    switch await ApiClient.request("/me") {
+    | Ok(res) => {
+        let fetched: me = await ApiClient.json(res)
+        setAccount(_ => Some(fetched))
+      }
+    | Error(_) => ()
+    }
+
   let loadGame = async () => {
     setError(_ => "")
     switch await ApiClient.request("/game") {
@@ -138,6 +151,7 @@ let make = () => {
         let fetched: game = await ApiClient.json(res)
         setGame(_ => Some(fetched))
         setAuthed(_ => Some(true))
+        loadAccount()->ignore
       }
     | Error(err) if err.status == 401 => setAuthed(_ => Some(false))
     | Error(err) => setError(_ => `Failed to load the game: ${err.message}`)
@@ -248,7 +262,17 @@ let make = () => {
   let handleLogout = async () => {
     // even if the server is unreachable, drop back to the login screen
     let _ = await AuthApi.logout()
+    setMenuOpen(_ => false)
     setAuthed(_ => Some(false))
+  }
+
+  // open the account popup and refresh its learned-word count
+  let toggleMenu = () => {
+    let opening = !menuOpen
+    setMenuOpen(_ => opening)
+    if opening {
+      loadAccount()->ignore
+    }
   }
 
   switch authed {
@@ -285,9 +309,39 @@ let make = () => {
             )}
           </p>
         </div>
-        <button type_="button" className="ghost" onClick={_ => handleLogout()->ignore}>
-          {React.string("Log out")}
-        </button>
+        {switch account {
+        | None => React.null
+        | Some(acc) =>
+          <div className="account">
+            <button
+              type_="button"
+              className="ghost username"
+              ariaLabel="Account"
+              onClick={_ => toggleMenu()}>
+              {React.string(acc.username)}
+            </button>
+            {!menuOpen
+              ? React.null
+              : <>
+                  <div className="menu-backdrop" onClick={_ => setMenuOpen(_ => false)} />
+                  <div className="account-menu" role="dialog">
+                    <p className="menu-name"> {React.string(acc.username)} </p>
+                    <div className="menu-stat">
+                      <span className="menu-count">
+                        {React.string(acc.learned->Belt.Int.toString)}
+                      </span>
+                      <span className="menu-label"> {React.string("words learned")} </span>
+                    </div>
+                    <button
+                      type_="button"
+                      className="ghost menu-logout"
+                      onClick={_ => handleLogout()->ignore}>
+                      {React.string("Log out")}
+                    </button>
+                  </div>
+                </>}
+          </div>
+        }}
       </header>
       {error == "" ? React.null : <p className="error" role="alert"> {React.string(error)} </p>}
       {switch game {

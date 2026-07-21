@@ -47,6 +47,7 @@ func main() {
 	game.HandleFunc("POST /game/guess", h.Guess)
 	mux.Handle("/game", middleware.Auth(db, game))
 	mux.Handle("/game/", middleware.Auth(db, game))
+	mux.Handle("/me", middleware.Auth(db, http.HandlerFunc(h.Me)))
 
 	allowedOrigin := env("ALLOWED_ORIGIN", "http://localhost:5173")
 	srv := &http.Server{

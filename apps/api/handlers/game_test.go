@@ -465,6 +465,32 @@ func TestRetry_WhilePlaying(t *testing.T) {
 	}
 }
 
+func TestMe_CountsDistinctLearnedWords(t *testing.T) {
+	h := setupGames(t)
+	// two won rounds share "TRENO", plus a lost round that must not count
+	finishRound(t, h, "ann", []string{"TRENO", "BANCA", "MUSICA", "LEONE", "PARCO"}, "won")
+	finishRound(t, h, "ann", []string{"TRENO", "GATTO", "CANE", "SOLE", "LUNA"}, "won")
+	finishRound(t, h, "ann", []string{"MARE", "FIUME", "LAGO", "CIELO", "VENTO"}, "lost")
+
+	rec := httptest.NewRecorder()
+	h.Me(rec, asUser("ann", "GET", "/me", ""))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var body struct {
+		Username string `json:"username"`
+		Learned  int    `json:"learned"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	// 9 distinct words won (TRENO counted once), lost round excluded
+	if body.Username != "ann" || body.Learned != 9 {
+		t.Errorf("expected ann with 9 learned, got %+v", body)
+	}
+}
+
 func TestNewGame_WhilePlaying(t *testing.T) {
 	h := setupGames(t)
 	startRound(t, h, "ann", testRound)

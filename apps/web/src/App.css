@@ -559,12 +559,76 @@
   padding-bottom: 0.6rem;
 }
 
-.app-header > button {
+.account {
   position: absolute;
   top: 0;
   right: 0;
+}
+
+.username {
   font-size: 13px;
   padding: 0.3rem 0.7rem;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* click-away layer behind the popup */
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+.account-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 21;
+  min-width: 12rem;
+  padding: 1rem;
+  text-align: center;
+  background: var(--bg);
+  border: 1px solid var(--text-h);
+  box-shadow: var(--shadow);
+}
+
+.menu-name {
+  font-weight: 700;
+  color: var(--text-h);
+  padding-bottom: 0.6rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.menu-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 0.9rem;
+}
+
+.menu-count {
+  font-family: var(--heading);
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.menu-label {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text);
+  margin-top: 0.3rem;
+}
+
+.menu-logout {
+  width: 100%;
 }
 
 .tagline {

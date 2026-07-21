@@ -79,13 +79,19 @@ func place(h *Games, user, letter string, word, pos int) *httptest.ResponseRecor
 	return rec
 }
 
-// solveRound places every letter of every word on its correct tile.
+// solveRound places one correct tile per distinct letter; each placement
+// reveals that letter everywhere, which completes the round.
 func solveRound(h *Games, user string, ws []string) *httptest.ResponseRecorder {
 	var last *httptest.ResponseRecorder
+	placed := map[string]bool{}
 	for wi, w := range ws {
 		e := english[w]
 		for i := 0; i < len(e); i++ {
-			last = place(h, user, string(e[i]), wi, i)
+			l := string(e[i])
+			if !placed[l] {
+				placed[l] = true
+				last = place(h, user, l, wi, i)
+			}
 		}
 	}
 	return last
@@ -170,7 +176,7 @@ func TestCurrentGame_CreatesRandomRound(t *testing.T) {
 	}
 }
 
-func TestGuess_CorrectPlacementRevealsOnlyThatTile(t *testing.T) {
+func TestGuess_CorrectPlacementRevealsEveryOccurrence(t *testing.T) {
 	h := setupGames(t)
 	startRound(t, h, "ann", testRound)
 
@@ -183,12 +189,12 @@ func TestGuess_CorrectPlacementRevealsOnlyThatTile(t *testing.T) {
 	if len(s.Wrong) != 0 {
 		t.Errorf("a correct placement must not count as a miss: %+v", s)
 	}
-	if s.Pairs[0].English[2] != "A" {
-		t.Errorf("expected the placed tile revealed, got %+v", s.Pairs[0])
+	// one correct A opens the A in TRAIN, BANK, and PARK alike
+	if s.Pairs[0].English[2] != "A" || s.Pairs[1].English[1] != "A" || s.Pairs[4].English[1] != "A" {
+		t.Errorf("expected every A revealed, got %+v", s.Pairs)
 	}
-	// the A in BANK and PARK must stay hidden — position matters now
-	if s.Pairs[1].English[1] != "" || s.Pairs[4].English[1] != "" {
-		t.Errorf("other occurrences must stay hidden, got %+v", s.Pairs)
+	if s.Pairs[0].English[0] != "" {
+		t.Errorf("other letters must stay hidden, got %+v", s.Pairs[0])
 	}
 }
 
@@ -263,27 +269,24 @@ func TestGuess_ManyMissesFlagsForReview(t *testing.T) {
 	}
 }
 
-func TestGuess_UsedUpListsFullyPlacedLetters(t *testing.T) {
+func TestGuess_CorrectPlacementUsesUpTheLetter(t *testing.T) {
 	h := setupGames(t)
 	startRound(t, h, "ann", testRound)
 
-	// place one of the three A tiles: A is not used up yet
+	// one correct A reveals every A, so the letter is spent immediately
 	s := decodeState(t, place(h, "ann", "A", 0, 2))
-	for _, l := range s.UsedUp {
-		if l == "A" {
-			t.Errorf("A still has hidden tiles and must not be used up: %+v", s.UsedUp)
-		}
-	}
 
-	// place the remaining A tiles (BANK and PARK)
-	place(h, "ann", "A", 1, 1)
-	s = decodeState(t, place(h, "ann", "A", 4, 1))
 	found := false
 	for _, l := range s.UsedUp {
 		found = found || l == "A"
 	}
 	if !found {
 		t.Errorf("every A is revealed, expected it used up: %+v", s.UsedUp)
+	}
+	for _, l := range s.UsedUp {
+		if l == "T" {
+			t.Errorf("T was never placed and must not be used up: %+v", s.UsedUp)
+		}
 	}
 }
 

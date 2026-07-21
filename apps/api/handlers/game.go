@@ -210,8 +210,17 @@ type tileKey struct{ word, pos int }
 func revealedTiles(g *game, attempts []attempt) map[tileKey]bool {
 	revealed := map[tileKey]bool{}
 	for _, a := range attempts {
-		if g.correct(a) {
-			revealed[tileKey{a.word, a.pos}] = true
+		if !g.correct(a) {
+			continue
+		}
+		// a correct placement opens every occurrence of that letter, so the
+		// player never has to place the same character twice
+		for wi, w := range g.words {
+			for i, r := range english[w] {
+				if string(r) == a.letter {
+					revealed[tileKey{wi, i}] = true
+				}
+			}
 		}
 	}
 	return revealed
@@ -425,7 +434,7 @@ func (h *Games) Guess(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if g.correct(a) {
-		revealed[tileKey{a.word, a.pos}] = true
+		revealed = revealedTiles(g, append(attempts, a))
 	} else {
 		wrong++
 	}

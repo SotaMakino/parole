@@ -102,6 +102,7 @@ type utterance
 @new external makeUtterance: string => utterance = "SpeechSynthesisUtterance"
 @set external setLang: (utterance, string) => unit = "lang"
 @set external setRate: (utterance, float) => unit = "rate"
+@set external setPitch: (utterance, float) => unit = "pitch"
 @val @scope(("window", "speechSynthesis"))
 external speak: utterance => unit = "speak"
 @val @scope(("window", "speechSynthesis"))
@@ -111,7 +112,8 @@ let speakItalian = word => {
   cancelSpeech() // cut off any word still playing
   let u = makeUtterance(word->Js.String2.toLowerCase)
   u->setLang("it-IT")
-  u->setRate(0.85) // a touch slower for learners
+  u->setRate(0.9) // speed
+  u->setPitch(1.0) // pitch
   speak(u)
 }
 

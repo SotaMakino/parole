@@ -1,5 +1,5 @@
 {
-  "name": "alle-cinque",
+  "name": "le-cinque",
   "private": true,
   "workspaces": ["web"],
   "trustedDependencies": ["rescript"],

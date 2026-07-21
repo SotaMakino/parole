@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"example.com/parole/store"
+	"example.com/le-cinque/store"
 )
 
 func setupDB(t *testing.T) *sql.DB {

@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"example.com/parole/middleware"
+	"example.com/le-cinque/middleware"
 )
 
 const (

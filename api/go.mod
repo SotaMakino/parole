@@ -1,4 +1,4 @@
-module example.com/parole
+module example.com/le-cinque
 
 go 1.26.2
 

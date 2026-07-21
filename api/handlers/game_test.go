@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"example.com/parole/middleware"
-	"example.com/parole/store"
+	"example.com/le-cinque/middleware"
+	"example.com/le-cinque/store"
 )
 
 func setupDB(t *testing.T) *sql.DB {

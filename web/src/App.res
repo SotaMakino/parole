@@ -300,7 +300,7 @@ let make = () => {
       <header className="app-header">
         <div>
           <h1>
-            {React.string("Alle ")}
+            {React.string("Le ")}
             <span className="cinque"> {React.string("Cinque")} </span>
           </h1>
           <p className="tagline">

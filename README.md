@@ -1,6 +1,6 @@
-# Alle Cinque
+# Le Cinque
 
-**Alle Cinque** ("at five") is a little game for learning beginner Italian
+**Le Cinque** ("five o'clock") is a little game for learning beginner Italian
 vocabulary, five words at a time.
 
 ![A round in progress](docs/gameplay.png)

@@ -184,12 +184,13 @@ let make = () => {
             setSelected(s => updated.usedUp->Belt.Array.some(l => l == s) ? "" : s)
             if updated.wrong->Belt.Array.length > g.wrong->Belt.Array.length {
               let left = updated.maxMisses - updated.wrong->Belt.Array.length
+              let shown = letter->Js.String2.toLowerCase
               setNotice(_ =>
                 left > 0
-                  ? `No ${letter} there — ${left->Belt.Int.toString} ${left == 1
+                  ? `No "${shown}" there — ${left->Belt.Int.toString} ${left == 1
                         ? "try"
                         : "tries"} left.`
-                  : `No ${letter} there.`
+                  : `No "${shown}" there.`
               )
             }
             if updated.status == "won" {

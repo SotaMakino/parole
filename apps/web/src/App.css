@@ -169,6 +169,7 @@
   letter-spacing: 1px;
   color: var(--text-h);
   white-space: nowrap;
+  text-transform: lowercase;
 }
 
 .speak {
@@ -203,6 +204,7 @@
   font-size: 18px;
   font-weight: 700;
   color: var(--text-h);
+  text-transform: lowercase;
   transition: background 0.15s, border-color 0.15s;
 }
 
@@ -274,6 +276,7 @@
   font-size: 14px;
   font-weight: 700;
   color: #fff;
+  text-transform: lowercase;
 }
 
 .chip.miss {
@@ -315,6 +318,7 @@
   background: var(--code-bg);
   color: var(--text-h);
   cursor: pointer;
+  text-transform: lowercase;
   transition: filter 0.15s, background 0.15s, opacity 0.15s;
 }
 

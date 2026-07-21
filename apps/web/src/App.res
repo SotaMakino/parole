@@ -95,7 +95,7 @@ let speakItalian = word => {
   cancelSpeech() // cut off any word still playing
   let u = makeUtterance(word->Js.String2.toLowerCase)
   u->setLang("it-IT")
-  u->setRate(0.7) // slowed down so each syllable is easy to catch
+  u->setRate(0.8) // slowed down so each syllable is easy to catch
   u->setPitch(1.0) // pitch
   speak(u)
 }

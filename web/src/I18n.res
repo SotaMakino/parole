@@ -32,9 +32,6 @@ type t = {
   haveAccountQ: string,
 }
 
-// the masthead kicker is the paper's own name — never translated, like "Le Cinque"
-let kicker = "Quotidiano di Vocabolario Italiano"
-
 let it: t = {
   connecting: "Connessione al server…",
   retry: "Riprova",

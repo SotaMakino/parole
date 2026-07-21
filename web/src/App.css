@@ -17,17 +17,6 @@
   border-top: 3px solid var(--ink);
 }
 
-/* edition kicker above the title */
-.masthead-kicker {
-  font-family: var(--sans);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  color: var(--ink);
-  margin: 0.4rem 0 0.1rem;
-}
-
 /* all-black, rounded wordmark in the spirit of the Gazzetta masthead */
 .app-header h1 {
   font-family: var(--logo);

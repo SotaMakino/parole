@@ -248,6 +248,8 @@ let make = () => {
   let (account, setAccount) = React.useState(() => None) // fetched player: guest or account
   let (menuOpen, setMenuOpen) = React.useState(() => false)
   let (showAuth, setShowAuth) = React.useState(() => false) // sign-in overlay
+  let (winDismissed, setWinDismissed) = React.useState(() => false) // win overlay closed
+  let (winCount, setWinCount) = React.useState(() => 0) // learned tally, counting up
   let (uiLang, setUiLang) = React.useState(() => #it) // UI language, toggled by the flags
   let tr = I18n.strings(uiLang) // localized UI strings
 
@@ -286,6 +288,7 @@ let make = () => {
   // UI language in step with whatever direction the round came back with
   let applyGame = (g: game) => {
     setGame(_ => Some(g))
+    setWinDismissed(_ => false) // a fresh round re-arms the win celebration
     setUiLang(_ => g.direction == "en" ? #en : #it)
   }
 
@@ -316,6 +319,68 @@ let make = () => {
     }
   }, (game, error))
 
+  // the night-sky win overlay is up while the round is won and not dismissed
+  let celebrating = switch game {
+  | Some(g) => g.status == "won" && !winDismissed
+  | None => false
+  }
+  let learned = switch account {
+  | Some(acc) => acc.learned
+  | None => 0
+  }
+
+  // tick the learned tally up from zero while the overlay is open
+  React.useEffect2(() => {
+    if celebrating && learned > 0 {
+      setWinCount(_ => 0)
+      let current = ref(0)
+      let per = 1400 / learned
+      let ms = per < 40 ? 40 : per
+      let idRef = ref(None)
+      let id = Js.Global.setInterval(() => {
+        if current.contents >= learned {
+          switch idRef.contents {
+          | Some(i) => Js.Global.clearInterval(i)
+          | None => ()
+          }
+        } else {
+          current := current.contents + 1
+          setWinCount(_ => current.contents)
+        }
+      }, ms)
+      idRef := Some(id)
+      Some(() => Js.Global.clearInterval(id))
+    } else {
+      setWinCount(_ => 0)
+      None
+    }
+  }, (celebrating, learned))
+
+  // keep the sky full of fireworks the whole time the overlay is open
+  React.useEffect1(() => {
+    if celebrating {
+      let spawn = () => {
+        let x = Js.Math.random_int(0, innerWidth)
+        let y = Js.Math.random_int(innerHeight / 8, innerHeight * 3 / 5)
+        let key = Js.Date.now()->Belt.Float.toInt + Js.Math.random_int(0, 100000)
+        setBursts(prev =>
+          prev->Belt.Array.concat([makeBurst(x, y, 0.7 +. Js.Math.random() *. 0.9, key)])
+        )
+        let _ = Js.Global.setTimeout(
+          () => setBursts(prev => prev->Belt.Array.keep(b => b.key != key)),
+          1500,
+        )
+      }
+      let id = Js.Global.setInterval(() => {
+        spawn()
+        spawn()
+      }, 250)
+      Some(() => Js.Global.clearInterval(id))
+    } else {
+      None
+    }
+  }, [celebrating])
+
   let (selected, setSelected) = React.useState(() => "") // letter picked from the keyboard
 
   // place one letter on one exact tile
@@ -341,6 +406,7 @@ let make = () => {
             }
             if updated.status == "won" {
               celebrate()
+              loadAccount()->ignore // refresh the learned tally for the win summary
             }
           }
         | Error(err) if err.status == 400 || err.status == 409 =>
@@ -688,32 +754,31 @@ let make = () => {
               {React.string(`${missCount->Belt.Int.toString} / ${g.maxMisses->Belt.Int.toString}`)}
             </span>
           </div>
-          {g.status == "playing"
-            ? React.null
-            : <div className="banner">
-                <p> {React.string(g.status == "won" ? tr.wonBanner : tr.lostBanner)} </p>
-                <div className="banner-actions">
-                  {
-                    // retrying the same words makes sense after a loss, not a win
-                    g.status == "won"
-                      ? React.null
-                      : <button
-                          type_="button"
-                          className="ghost"
-                          disabled=busy
-                          onClick={_ => retryGame()->ignore}>
-                          {React.string(tr.retry)}
-                        </button>
-                  }
-                  <button
-                    type_="button"
-                    className="primary"
-                    disabled=busy
-                    onClick={_ => newGame()->ignore}>
-                    {React.string(tr.newGame)}
-                  </button>
+          {
+            // a loss keeps the inline banner (retry + new game); a win gets the
+            // full-screen night celebration overlay instead (rendered below)
+            g.status == "lost"
+              ? <div className="banner">
+                  <p> {React.string(tr.lostBanner)} </p>
+                  <div className="banner-actions">
+                    <button
+                      type_="button"
+                      className="ghost"
+                      disabled=busy
+                      onClick={_ => retryGame()->ignore}>
+                      {React.string(tr.retry)}
+                    </button>
+                    <button
+                      type_="button"
+                      className="primary"
+                      disabled=busy
+                      onClick={_ => newGame()->ignore}>
+                      {React.string(tr.newGame)}
+                    </button>
+                  </div>
                 </div>
-              </div>}
+              : React.null
+          }
         </>
       }
       {bursts
@@ -748,6 +813,37 @@ let make = () => {
         </div>
       )
       ->React.array}
+      {
+        // night-sky celebration: dark backdrop, counting-up tally, and (via the
+        // effects above) a sky full of fireworks that render on top of it
+        !celebrating
+          ? React.null
+          : <div className="win-overlay">
+              <button
+                type_="button"
+                className="win-close"
+                ariaLabel={tr.close}
+                onClick={_ => setWinDismissed(_ => true)}>
+                {React.string("×")}
+              </button>
+              <div className="win-summary">
+                <p className="win-message"> {React.string(tr.wonBanner)} </p>
+                <div className="win-count">
+                  <span className="win-count-num">
+                    {React.string(winCount->Belt.Int.toString)}
+                  </span>
+                  <span className="win-count-label"> {React.string(tr.wordsLearned)} </span>
+                </div>
+                <button
+                  type_="button"
+                  className="primary win-new"
+                  disabled=busy
+                  onClick={_ => newGame()->ignore}>
+                  {React.string(tr.newGame)}
+                </button>
+              </div>
+            </div>
+      }
       <footer className="app-footer"> {React.string(tr.footer)} </footer>
     </main>
   }

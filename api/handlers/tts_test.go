@@ -34,6 +34,7 @@ func TestTTS_RejectsBadInput(t *testing.T) {
 		{"digits", "word=cane123", http.StatusBadRequest},
 		{"too long", "word=" + strings.Repeat("a", 65), http.StatusBadRequest},
 		{"unsupported lang", "word=cane&lang=de-DE", http.StatusBadRequest},
+		{"not in curriculum", "word=notarealword&lang=it-IT", http.StatusBadRequest},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -61,6 +61,22 @@ var ttsVoices = map[string]string{
 	"en-US": "en-US-Neural2-C",
 }
 
+// ttsAllowed[lang] is the set of curriculum words (lowercased) that may be
+// synthesized in that language. Restricting the endpoint to the fixed
+// vocabulary is the main abuse guard: an attacker can call /tts any number of
+// times, but only these ~1500 words per language ever reach Google — and each
+// is cached after the first call — so total synthesis is bounded no matter the
+// request volume. Arbitrary text (aaaa, aaab, …) is rejected before it costs.
+var ttsAllowed = func() map[string]map[string]bool {
+	it := make(map[string]bool, len(words))
+	en := make(map[string]bool, len(words))
+	for _, v := range words {
+		it[strings.ToLower(v.Italian)] = true
+		en[strings.ToLower(v.English)] = true
+	}
+	return map[string]map[string]bool{"it-IT": it, "en-US": en}
+}()
+
 // ttsSpeakingRate matches the old browser rate: a little slow so each syllable
 // is easy to catch. Baked into the audio, so playback stays at normal speed.
 const ttsSpeakingRate = 0.8
@@ -89,6 +105,12 @@ func (t *TTS) Speak(w http.ResponseWriter, r *http.Request) {
 	}
 	if !wordRE.MatchString(word) {
 		writeError(w, http.StatusBadRequest, "invalid word")
+		return
+	}
+	if !ttsAllowed[lang][word] {
+		// not a curriculum word — refuse so /tts can't be used to synthesize
+		// (and bill for) arbitrary text
+		writeError(w, http.StatusBadRequest, "unknown word")
 		return
 	}
 

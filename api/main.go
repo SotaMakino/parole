@@ -32,12 +32,21 @@ func main() {
 
 	h := &handlers.Games{DB: db}
 	a := &handlers.Auth{DB: db}
+	// GOOGLE_TTS_CREDENTIALS holds a service-account key JSON. If unset or bad,
+	// TTS stays disabled and the frontend falls back to browser speech, so the
+	// game still runs.
+	t, err := handlers.NewTTS(context.Background(), env("GOOGLE_TTS_CREDENTIALS", ""))
+	if err != nil {
+		log.Printf("TTS disabled: %v", err)
+		t = &handlers.TTS{}
+	}
 	mux := http.NewServeMux()
 
 	// public
 	mux.HandleFunc("POST /signup", a.Signup)
 	mux.HandleFunc("POST /login", a.Login)
 	mux.HandleFunc("POST /logout", a.Logout)
+	mux.HandleFunc("GET /tts", t.Speak) // Italian word pronunciation (Google Cloud TTS)
 
 	// no login required — an anonymous "player" cookie identifies each browser
 	game := http.NewServeMux()

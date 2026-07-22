@@ -153,38 +153,19 @@
   box-shadow: 0 0 0 3px var(--accent-bg);
 }
 
-.tagline {
+/* the language flags sit under the wordmark, joined by a "|" */
+.flag-row {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.6rem;
-  font-size: 12px;
-  margin: 0.15rem 0 0;
+  gap: 0.5rem;
+  margin-top: 0.1rem;
 }
 
-.tagline-text {
-  display: grid;
-  align-items: center; /* center the shorter (English) line in the reserved box */
-  max-width: 42rem;
-  text-align: center;
-}
-
-/* stack both languages in one cell so the box is always as tall as the taller
-   (Italian) line — toggling the flag then never shifts the layout */
-.tagline-text .lang-line {
-  grid-area: 1 / 1;
-}
-
-.tagline-text .lang-line.hidden {
-  visibility: hidden;
-}
-
-/* flags flank the wordmark on the left and right of the title row */
-.title-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
+.flag-sep {
+  color: var(--text);
+  opacity: 0.35;
+  font-size: 16px;
 }
 
 /* language flags flanking the title; the inactive one is dimmed */

@@ -378,11 +378,15 @@ let make = () => {
             }}
           </div>
         </div>
+        <h1>
+          {React.string("Le ")}
+          <span className="cinque"> {React.string("Cinque")} </span>
+        </h1>
         {
           // the flags choose the guessing direction, so they lock once the
           // round is under way — you can only switch on a fresh board
           let locked = g.guessed->Belt.Array.length > 0
-          <div className="title-row">
+          <div className="flag-row">
             <button
               type_="button"
               className={g.direction == "it" ? "flag active" : "flag"}
@@ -391,10 +395,7 @@ let make = () => {
               onClick={_ => setDirection("it")->ignore}>
               {React.string(`🇮🇹`)}
             </button>
-            <h1>
-              {React.string("Le ")}
-              <span className="cinque"> {React.string("Cinque")} </span>
-            </h1>
+            <span className="flag-sep"> {React.string("|")} </span>
             <button
               type_="button"
               className={g.direction == "en" ? "flag active" : "flag"}
@@ -405,18 +406,6 @@ let make = () => {
             </button>
           </div>
         }
-        <p className="tagline">
-          <span className="tagline-text">
-            // both languages are laid out in the same grid cell; the hidden one
-            // still reserves space, so toggling never shifts the layout
-            <span className={uiLang == #it ? "lang-line" : "lang-line hidden"}>
-              {React.string(I18n.it.tagline)}
-            </span>
-            <span className={uiLang == #en ? "lang-line" : "lang-line hidden"}>
-              {React.string(I18n.en.tagline)}
-            </span>
-          </span>
-        </p>
       </header>
       {!showAuth
         ? React.null

@@ -13,7 +13,7 @@
   position: relative;
   text-align: center;
   margin-bottom: 1.5rem;
-  padding-top: 0.5rem;
+  padding-top: 0.15rem;
   border-top: 3px solid var(--ink);
 }
 
@@ -39,7 +39,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.35rem 0;
+  padding: 0.1rem 0;
   font-family: var(--sans);
   font-size: 11px;
   font-weight: 600;

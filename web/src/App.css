@@ -871,6 +871,12 @@
   width: 100%;
 }
 
+.menu-delete {
+  width: 100%;
+  margin-top: 6px;
+  color: #cd212a; /* flag red — this is the destructive action */
+}
+
 .tagline {
   font-style: italic;
 }

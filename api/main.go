@@ -58,7 +58,9 @@ func main() {
 	game.HandleFunc("POST /game/guess", h.Guess)
 	mux.Handle("/game", middleware.Player(db, game))
 	mux.Handle("/game/", middleware.Player(db, game))
-	mux.Handle("/me", middleware.Player(db, http.HandlerFunc(h.Me)))
+	mux.Handle("GET /me", middleware.Player(db, http.HandlerFunc(h.Me)))
+	// deleting an account needs a real session, not just a guest cookie
+	mux.Handle("DELETE /me", middleware.Auth(db, http.HandlerFunc(a.DeleteAccount)))
 
 	allowedOrigins := strings.Split(env("ALLOWED_ORIGIN", "http://localhost:5173"), ",")
 	srv := &http.Server{

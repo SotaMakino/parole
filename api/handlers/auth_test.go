@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"example.com/le-cinque/middleware"
 )
 
 func setupAuth(t *testing.T) *Auth {
@@ -138,6 +140,60 @@ func TestLogout(t *testing.T) {
 	}
 	if count != 0 {
 		t.Errorf("expected session deleted from DB, found %d", count)
+	}
+}
+
+func TestDeleteAccount(t *testing.T) {
+	a := setupAuth(t)
+	signup(t, a, `{"username":"ann","password":"secret123"}`)
+	login(t, a, `{"username":"ann","password":"secret123"}`)
+
+	// give ann a round with a guess, so cascade deletion is exercised too
+	var gameID int64
+	if err := a.DB.QueryRow(
+		"INSERT INTO games (username, word, status) VALUES ('ann','TRENO','won') RETURNING id",
+	).Scan(&gameID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.DB.Exec("INSERT INTO guesses (game_id, guess) VALUES ($1, 'T:0:0')", gameID); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("DELETE", "/me", nil)
+	req = req.WithContext(middleware.WithUser(req.Context(), "ann"))
+	rec := httptest.NewRecorder()
+
+	a.DeleteAccount(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", rec.Code)
+	}
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Name != "session" || cookies[0].MaxAge != -1 {
+		t.Errorf("expected session cookie deletion (MaxAge -1), got %v", cookies)
+	}
+
+	// account, sessions, and games are all gone
+	for _, q := range []string{
+		"SELECT COUNT(*) FROM accounts WHERE username = 'ann'",
+		"SELECT COUNT(*) FROM sessions WHERE username = 'ann'",
+		"SELECT COUNT(*) FROM games WHERE username = 'ann'",
+	} {
+		var n int
+		if err := a.DB.QueryRow(q).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		if n != 0 {
+			t.Errorf("expected 0 rows for %q, got %d", q, n)
+		}
+	}
+	// guesses go with their game via ON DELETE CASCADE
+	var guesses int
+	if err := a.DB.QueryRow("SELECT COUNT(*) FROM guesses WHERE game_id = $1", gameID).Scan(&guesses); err != nil {
+		t.Fatal(err)
+	}
+	if guesses != 0 {
+		t.Errorf("expected guesses cascade-deleted, got %d", guesses)
 	}
 }
 

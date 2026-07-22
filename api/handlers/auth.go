@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"example.com/le-cinque/middleware"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -78,6 +79,46 @@ func (a *Auth) Logout(w http.ResponseWriter, r *http.Request) {
 		Name: "session", Value: "", Path: "/",
 		HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
 		MaxAge: -1, // tells the browser: delete this cookie
+	})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DeleteAccount permanently removes the signed-in account and everything tied to
+// it — game history, sessions, and the account row itself — honouring the "email
+// us to delete your data" promise in the Privacy Policy as a self-service button.
+// The route requires a valid session (see middleware.Auth), so the user to delete
+// is whoever the cookie identifies.
+func (a *Auth) DeleteAccount(w http.ResponseWriter, r *http.Request) {
+	user := middleware.Username(r)
+
+	// one transaction so a half-deleted account can never be left behind. Guesses
+	// clear on their own: the games -> guesses foreign key is ON DELETE CASCADE.
+	tx, err := a.DB.Begin()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not delete account")
+		return
+	}
+	defer tx.Rollback()
+	for _, q := range []string{
+		"DELETE FROM games WHERE username = $1",
+		"DELETE FROM sessions WHERE username = $1",
+		"DELETE FROM accounts WHERE username = $1",
+	} {
+		if _, err := tx.Exec(q, user); err != nil {
+			writeError(w, http.StatusInternalServerError, "could not delete account")
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not delete account")
+		return
+	}
+
+	// clear the now-orphaned session cookie, same attributes as Logout
+	http.SetCookie(w, &http.Cookie{
+		Name: "session", Value: "", Path: "/",
+		HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
+		MaxAge: -1,
 	})
 	w.WriteHeader(http.StatusNoContent)
 }

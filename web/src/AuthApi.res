@@ -23,3 +23,9 @@ let logout = async () =>
   | Ok(_) => Ok()
   | Error(e) => Error(e)
   }
+
+let deleteAccount = async () =>
+  switch await ApiClient.request("/me", ~method_="DELETE") {
+  | Ok(_) => Ok()
+  | Error(e) => Error(e)
+  }

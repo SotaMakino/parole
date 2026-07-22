@@ -22,6 +22,7 @@ type game = {
 
 @val @scope("window") external innerWidth: int = "innerWidth"
 @val @scope("window") external innerHeight: int = "innerHeight"
+@val @scope("window") external confirmDialog: string => bool = "confirm"
 
 type keyboardEvent
 @get external eventKey: keyboardEvent => string = "key"
@@ -299,6 +300,14 @@ let make = () => {
     afterAuthChange()
   }
 
+  // deleting the account wipes it server-side and drops the browser back to
+  // anonymous guest play, so reuse the same reload path as signing out
+  let handleDeleteAccount = async () =>
+    if confirmDialog(tr.deleteConfirm) {
+      let _ = await AuthApi.deleteAccount()
+      afterAuthChange()
+    }
+
   // open the account popup and refresh its learned-word count
   let toggleMenu = () => {
     let opening = !menuOpen
@@ -364,6 +373,12 @@ let make = () => {
                           className="ghost menu-logout"
                           onClick={_ => handleLogout()->ignore}>
                           {React.string(tr.logOut)}
+                        </button>
+                        <button
+                          type_="button"
+                          className="ghost menu-delete"
+                          onClick={_ => handleDeleteAccount()->ignore}>
+                          {React.string(tr.deleteAccount)}
                         </button>
                       </div>
                     </>}

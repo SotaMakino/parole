@@ -333,7 +333,50 @@ let make = () => {
               },
             )}
           </span>
-          <span className="dateline-date"> {React.string(I18n.editionDate(uiLang))} </span>
+          <div className="dateline-meta">
+            <span className="dateline-date"> {React.string(I18n.editionDate(uiLang))} </span>
+            <span className="dateline-sep"> {React.string("|")} </span>
+            {switch account {
+            | Some(acc) if !acc.guest =>
+              // signed in: name opens a popup with the vocabulary count + log out
+              <div className="account">
+                <button
+                  type_="button"
+                  className="username"
+                  ariaLabel={tr.account}
+                  onClick={_ => toggleMenu()}>
+                  {React.string(acc.username)}
+                </button>
+                {!menuOpen
+                  ? React.null
+                  : <>
+                      <div className="menu-backdrop" onClick={_ => setMenuOpen(_ => false)} />
+                      <div className="account-menu" role="dialog">
+                        <p className="menu-name"> {React.string(acc.username)} </p>
+                        <div className="menu-stat">
+                          <span className="menu-count">
+                            {React.string(acc.learned->Belt.Int.toString)}
+                          </span>
+                          <span className="menu-label"> {React.string(tr.wordsLearned)} </span>
+                        </div>
+                        <button
+                          type_="button"
+                          className="ghost menu-logout"
+                          onClick={_ => handleLogout()->ignore}>
+                          {React.string(tr.logOut)}
+                        </button>
+                      </div>
+                    </>}
+              </div>
+            | _ =>
+              // guest: a link to sign in and start tracking learned words
+              <div className="account">
+                <button type_="button" className="username" onClick={_ => setShowAuth(_ => true)}>
+                  {React.string(tr.signIn)}
+                </button>
+              </div>
+            }}
+          </div>
         </div>
         {
           // the flags choose the guessing direction, so they lock once the
@@ -374,46 +417,6 @@ let make = () => {
             </span>
           </span>
         </p>
-        {switch account {
-        | Some(acc) if !acc.guest =>
-          // signed in: name opens a popup with the vocabulary count + log out
-          <div className="account">
-            <button
-              type_="button"
-              className="ghost username"
-              ariaLabel={tr.account}
-              onClick={_ => toggleMenu()}>
-              {React.string(acc.username)}
-            </button>
-            {!menuOpen
-              ? React.null
-              : <>
-                  <div className="menu-backdrop" onClick={_ => setMenuOpen(_ => false)} />
-                  <div className="account-menu" role="dialog">
-                    <p className="menu-name"> {React.string(acc.username)} </p>
-                    <div className="menu-stat">
-                      <span className="menu-count">
-                        {React.string(acc.learned->Belt.Int.toString)}
-                      </span>
-                      <span className="menu-label"> {React.string(tr.wordsLearned)} </span>
-                    </div>
-                    <button
-                      type_="button"
-                      className="ghost menu-logout"
-                      onClick={_ => handleLogout()->ignore}>
-                      {React.string(tr.logOut)}
-                    </button>
-                  </div>
-                </>}
-          </div>
-        | _ =>
-          // guest: a link to sign in and start tracking learned words
-          <div className="account">
-            <button type_="button" className="ghost username" onClick={_ => setShowAuth(_ => true)}>
-              {React.string(tr.signIn)}
-            </button>
-          </div>
-        }}
       </header>
       {!showAuth
         ? React.null

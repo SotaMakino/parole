@@ -949,3 +949,24 @@
   font-size: 10px;
   color: rgba(58, 43, 40, 0.5); /* muted gray-brown on the pink paper */
 }
+
+.app-footer .footer-line {
+  margin: 0;
+}
+
+.app-footer .footer-links {
+  margin: 4px 0 0;
+}
+
+.app-footer .footer-links a {
+  color: rgba(58, 43, 40, 0.6);
+  text-decoration: none;
+}
+
+.app-footer .footer-links a:hover {
+  text-decoration: underline;
+}
+
+.app-footer .footer-sep {
+  margin: 0 6px;
+}

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy Policy — Le Cinque</title>
+    <style>
+      :root {
+        --ink: #3a2b28;
+        --muted: rgba(58, 43, 40, 0.6);
+        --paper: #fbeef0;
+        --rule: rgba(58, 43, 40, 0.18);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: Georgia, "Times New Roman", serif;
+        line-height: 1.6;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 40px 24px 64px;
+      }
+      .masthead {
+        text-align: center;
+        border-bottom: 2px solid var(--ink);
+        padding-bottom: 12px;
+        margin-bottom: 28px;
+      }
+      .masthead a { color: inherit; text-decoration: none; }
+      .masthead h1 { font-size: 30px; margin: 0; letter-spacing: 0.5px; }
+      .masthead .cinque { color: #cd212a; }
+      .doc-title { font-size: 24px; margin: 0 0 4px; }
+      .effective { color: var(--muted); font-size: 14px; margin: 0 0 28px; }
+      h2 { font-size: 18px; margin: 30px 0 8px; border-bottom: 1px solid var(--rule); padding-bottom: 4px; }
+      p, li { font-size: 16px; }
+      ul { padding-left: 22px; }
+      a { color: #cd212a; }
+      .back { display: inline-block; margin-top: 36px; font-size: 15px; }
+      footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 40px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="masthead">
+        <a href="/"><h1>Le <span class="cinque">Cinque</span></h1></a>
+      </div>
+
+      <h2 class="doc-title" style="border:none;">Privacy Policy</h2>
+      <p class="effective">Effective 22 July 2026</p>
+
+      <p>
+        Le Cinque is a free language-learning game run by an individual.
+      </p>
+
+      <h2>What we store</h2>
+      <ul>
+        <li>Your <strong>username</strong> and a one-way <strong>bcrypt hash</strong> of your password (never the password itself).</li>
+        <li>Your <strong>game history</strong> (words shown, guesses, learned count).</li>
+        <li>Two strictly-necessary cookies: <strong>session</strong> (login, ~24h) and <strong>player</strong> (anonymous guest id, ~1yr). No analytics or tracking cookies.</li>
+      </ul>
+
+      <h2>Third parties</h2>
+      <p>
+        When you tap 🔊, the game word (not personal data) is sent to Google
+        Cloud Text-to-Speech. The site is hosted on Cloudflare and Render, which
+        may process technical data such as your IP to serve requests.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        <a href="mailto:sotamakino.g@gmail.com">sotamakino.g@gmail.com</a>
+      </p>
+
+      <p>
+        <a class="back" href="/">← Back to the game</a>
+      </p>
+
+      <footer>Le Cinque</footer>
+    </main>
+  </body>
+</html>

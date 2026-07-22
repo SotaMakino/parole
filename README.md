@@ -17,3 +17,7 @@ A game for learning beginner Italian vocabulary, five words at a time.
 Five Italian words are laid out with their English translations hidden — fill in the letters to reveal all five before you run out of mistakes. Over 1,500 everyday words, with spaced repetition so the ones you miss come back later.
 
 *Buono studio!* 📚🇮🇹
+
+## License
+
+[MIT](LICENSE)

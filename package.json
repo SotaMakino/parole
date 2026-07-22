@@ -1,6 +1,7 @@
 {
   "name": "le-cinque",
   "private": true,
+  "license": "MIT",
   "workspaces": ["web"],
   "trustedDependencies": ["rescript"],
   "scripts": {

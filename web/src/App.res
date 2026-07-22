@@ -20,43 +20,6 @@ type game = {
   maxMisses: int, // wrong placements allowed before the round is lost
 }
 
-// celebration fireworks: staggered bursts of randomized particles
-type particle = {
-  dx: float,
-  dy: float,
-  size: float,
-  rot: float,
-  color: string,
-  delay: int,
-  duration: int,
-  streak: bool, // confetti streak instead of a round spark
-}
-
-type burst = {x: int, y: int, key: int, particles: array<particle>}
-
-let burstColors = ["#aa3bff", "#f59e0b", "#ef4444", "#22c55e", "#06b6d4", "#ec4899", "#facc15"]
-
-let makeBurst = (x, y, scale, key) => {
-  let count = 24
-  let particles = Belt.Array.makeBy(count, i => {
-    let angle =
-      2.0 *. Js.Math._PI *. Belt.Int.toFloat(i) /. Belt.Int.toFloat(count) +.
-        (Js.Math.random() -. 0.5) *. 0.5
-    let distance = (55.0 +. Js.Math.random() *. 65.0) *. scale
-    {
-      dx: Js.Math.cos(angle) *. distance,
-      dy: Js.Math.sin(angle) *. distance,
-      size: 4.0 +. Js.Math.random() *. 5.0,
-      rot: Js.Math.random() *. 360.0,
-      color: burstColors->Belt.Array.getExn(mod(i, Belt.Array.length(burstColors))),
-      delay: Js.Math.random_int(0, 90),
-      duration: 700 + Js.Math.random_int(0, 450),
-      streak: mod(i, 3) == 0,
-    }
-  })
-  {x, y, key, particles}
-}
-
 @val @scope("window") external innerWidth: int = "innerWidth"
 @val @scope("window") external innerHeight: int = "innerHeight"
 
@@ -87,157 +50,6 @@ type dataTransfer
 @get external dataTransfer: ReactEvent.Mouse.t => dataTransfer = "dataTransfer"
 @send external setData: (dataTransfer, string, string) => unit = "setData"
 
-// browser text-to-speech for Italian pronunciation
-type utterance
-@new external makeUtterance: string => utterance = "SpeechSynthesisUtterance"
-@set external setLang: (utterance, string) => unit = "lang"
-@set external setRate: (utterance, float) => unit = "rate"
-@set external setPitch: (utterance, float) => unit = "pitch"
-@val @scope(("window", "speechSynthesis"))
-external speak: utterance => unit = "speak"
-@val @scope(("window", "speechSynthesis"))
-external cancelSpeech: unit => unit = "cancel"
-
-// pronounce a word in the given BCP-47 voice ("it-IT" or "en-US")
-let speakWord = (word, langCode) => {
-  cancelSpeech() // cut off any word still playing
-  let u = makeUtterance(word->Js.String2.toLowerCase)
-  u->setLang(langCode)
-  u->setRate(0.8) // slowed down so each syllable is easy to catch
-  u->setPitch(1.0) // pitch
-  speak(u)
-}
-
-// spell the play count for the masthead issue line (e.g. 130 → "centotrenta" /
-// "one hundred thirty"), covering 0–9999; larger counts fall back to digits only
-let italianUnits = [
-  "zero",
-  "uno",
-  "due",
-  "tre",
-  "quattro",
-  "cinque",
-  "sei",
-  "sette",
-  "otto",
-  "nove",
-  "dieci",
-  "undici",
-  "dodici",
-  "tredici",
-  "quattordici",
-  "quindici",
-  "sedici",
-  "diciassette",
-  "diciotto",
-  "diciannove",
-]
-let italianTens = [
-  "",
-  "",
-  "venti",
-  "trenta",
-  "quaranta",
-  "cinquanta",
-  "sessanta",
-  "settanta",
-  "ottanta",
-  "novanta",
-]
-
-// drop the trailing vowel of a tens/hundreds word before joining, e.g.
-// venti+uno → ventuno, cento+otto → centotto
-let dropLast = s => s->Js.String2.slice(~from=0, ~to_=s->Js.String2.length - 1)
-
-let rec spellItalian = n =>
-  if n < 20 {
-    italianUnits->Belt.Array.getExn(n)
-  } else if n < 100 {
-    let base = italianTens->Belt.Array.getExn(n / 10)
-    switch mod(n, 10) {
-    | 0 => base
-    | (1 | 8) as u => dropLast(base) ++ italianUnits->Belt.Array.getExn(u) // ventuno, ventotto
-    | 3 => base ++ "tré" // ventitré
-    | u => base ++ italianUnits->Belt.Array.getExn(u)
-    }
-  } else if n < 1000 {
-    let rest = mod(n, 100)
-    let prefix = n / 100 == 1 ? "cento" : italianUnits->Belt.Array.getExn(n / 100) ++ "cento"
-    if rest == 0 {
-      prefix
-    } else {
-      let word = spellItalian(rest)
-      // merge the double o: cento+otto → centotto, cento+ottanta → centottanta
-      word->Js.String2.charAt(0) == "o" ? dropLast(prefix) ++ word : prefix ++ word
-    }
-  } else if n < 10000 {
-    let rest = mod(n, 1000)
-    let prefix = n / 1000 == 1 ? "mille" : italianUnits->Belt.Array.getExn(n / 1000) ++ "mila"
-    rest == 0 ? prefix : prefix ++ spellItalian(rest)
-  } else {
-    ""
-  }
-
-let englishUnits = [
-  "zero",
-  "one",
-  "two",
-  "three",
-  "four",
-  "five",
-  "six",
-  "seven",
-  "eight",
-  "nine",
-  "ten",
-  "eleven",
-  "twelve",
-  "thirteen",
-  "fourteen",
-  "fifteen",
-  "sixteen",
-  "seventeen",
-  "eighteen",
-  "nineteen",
-]
-let englishTens = [
-  "",
-  "",
-  "twenty",
-  "thirty",
-  "forty",
-  "fifty",
-  "sixty",
-  "seventy",
-  "eighty",
-  "ninety",
-]
-
-let rec spellEnglish = n =>
-  if n < 20 {
-    englishUnits->Belt.Array.getExn(n)
-  } else if n < 100 {
-    let tens = englishTens->Belt.Array.getExn(n / 10)
-    mod(n, 10) == 0 ? tens : `${tens}-${englishUnits->Belt.Array.getExn(mod(n, 10))}` // sixty-nine
-  } else if n < 1000 {
-    let hundreds = `${englishUnits->Belt.Array.getExn(n / 100)} hundred`
-    let rest = mod(n, 100)
-    rest == 0 ? hundreds : `${hundreds} ${spellEnglish(rest)}`
-  } else if n < 10000 {
-    let thousands = `${englishUnits->Belt.Array.getExn(n / 1000)} thousand`
-    let rest = mod(n, 1000)
-    rest == 0 ? thousands : `${thousands} ${spellEnglish(rest)}`
-  } else {
-    ""
-  }
-
-// "N. 130 · centotrenta" / "No. 130 · one hundred thirty" (digits only past range)
-let issueLabel = (lang, plays) => {
-  let digits = plays->Belt.Int.toString
-  let (prefix, word) = lang == #it ? ("N.", spellItalian(plays)) : ("No.", spellEnglish(plays))
-  word == "" ? `${prefix} ${digits}` : `${prefix} ${digits} · ${word}`
-}
-
 @react.component
 let make = () => {
   let (game, setGame) = React.useState(() => None)
@@ -262,7 +74,7 @@ let make = () => {
       let key = base + index
       let _ = Js.Global.setTimeout(() => {
         setBursts(prev =>
-          prev->Belt.Array.concat([makeBurst(x + offsetX, y + offsetY, scale, key)])
+          prev->Belt.Array.concat([Fireworks.makeBurst(x + offsetX, y + offsetY, scale, key)])
         )
         let _ = Js.Global.setTimeout(
           () => setBursts(prev => prev->Belt.Array.keep(b => b.key != key)),
@@ -364,7 +176,7 @@ let make = () => {
         let y = Js.Math.random_int(innerHeight / 8, innerHeight * 3 / 5)
         let key = Js.Date.now()->Belt.Float.toInt + Js.Math.random_int(0, 100000)
         setBursts(prev =>
-          prev->Belt.Array.concat([makeBurst(x, y, 0.7 +. Js.Math.random() *. 0.9, key)])
+          prev->Belt.Array.concat([Fireworks.makeBurst(x, y, 0.7 +. Js.Math.random() *. 0.9, key)])
         )
         let _ = Js.Global.setTimeout(
           () => setBursts(prev => prev->Belt.Array.keep(b => b.key != key)),
@@ -516,7 +328,7 @@ let make = () => {
           <span>
             {React.string(
               switch account {
-              | Some(acc) => issueLabel(uiLang, acc.plays)
+              | Some(acc) => NumberWords.issueLabel(uiLang, acc.plays)
               | None => uiLang == #it ? "N. —" : "No. —"
               },
             )}
@@ -654,7 +466,7 @@ let make = () => {
                       className="speak"
                       title={I18n.pronounce(uiLang, p.prompt)}
                       ariaLabel={I18n.pronounce(uiLang, p.prompt)}
-                      onClick={_ => speakWord(p.prompt, promptLang)}>
+                      onClick={_ => Speech.speakWord(p.prompt, promptLang)}>
                       {React.string(`🔊`)}
                     </button>
                     {React.string(p.prompt)}
@@ -781,38 +593,7 @@ let make = () => {
           }
         </>
       }
-      {bursts
-      ->Belt.Array.map(b =>
-        <div
-          key={b.key->Belt.Int.toString}
-          className="firework"
-          ariaHidden=true
-          style={{
-            left: `${b.x->Belt.Int.toString}px`,
-            top: `${b.y->Belt.Int.toString}px`,
-          }}>
-          {b.particles
-          ->Belt.Array.mapWithIndex((i, p) => {
-            let height = p.streak ? p.size *. 2.8 : p.size
-            let base: ReactDOM.Style.t = {
-              backgroundColor: p.color,
-              width: `${p.size->Js.Float.toString}px`,
-              height: `${height->Js.Float.toString}px`,
-              boxShadow: `0 0 6px ${p.color}`,
-              animationDelay: `${p.delay->Belt.Int.toString}ms`,
-              animationDuration: `${p.duration->Belt.Int.toString}ms`,
-            }
-            let style =
-              base
-              ->ReactDOM.Style.unsafeAddProp("--dx", `${p.dx->Js.Float.toString}px`)
-              ->ReactDOM.Style.unsafeAddProp("--dy", `${p.dy->Js.Float.toString}px`)
-              ->ReactDOM.Style.unsafeAddProp("--rot", `${p.rot->Js.Float.toString}deg`)
-            <span key={i->Belt.Int.toString} className={p.streak ? "streak" : "dot"} style />
-          })
-          ->React.array}
-        </div>
-      )
-      ->React.array}
+      <Fireworks bursts />
       {
         // night-sky celebration: dark backdrop, counting-up tally, and (via the
         // effects above) a sky full of fireworks that render on top of it

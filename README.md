@@ -34,7 +34,7 @@ The game borrows a few ideas from how people actually remember things:
 - **Spaced repetition** — words you miss quietly return a few rounds later,
   right when a reminder helps most.
 
-There are over 800 everyday words in the pool — nouns, verbs, adjectives,
+There are over 1,500 everyday words in the pool — nouns, verbs, adjectives,
 numbers, the months — and every round deals a fresh random five. Your account
 keeps a running count of the words you've learned.
 

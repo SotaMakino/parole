@@ -693,13 +693,18 @@ let make = () => {
             : <div className="banner">
                 <p> {React.string(g.status == "won" ? tr.wonBanner : tr.lostBanner)} </p>
                 <div className="banner-actions">
-                  <button
-                    type_="button"
-                    className="ghost"
-                    disabled=busy
-                    onClick={_ => retryGame()->ignore}>
-                    {React.string(tr.retry)}
-                  </button>
+                  {
+                    // retrying the same words makes sense after a loss, not a win
+                    g.status == "won"
+                      ? React.null
+                      : <button
+                          type_="button"
+                          className="ghost"
+                          disabled=busy
+                          onClick={_ => retryGame()->ignore}>
+                          {React.string(tr.retry)}
+                        </button>
+                  }
                   <button
                     type_="button"
                     className="primary"

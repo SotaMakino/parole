@@ -455,7 +455,8 @@ let make = () => {
 
   // a pointer press (click or tap, anywhere) drops the arrow-key cursor so it
   // never lingers once the mouse takes over. A press outside the on-screen
-  // keyboard also blurs any focused key, so its focus ring doesn't stick.
+  // keyboard also blurs any focused key, so its focus ring doesn't stick, and
+  // drops the picked letter so the key and the armed slots lose their color.
   React.useEffect0(() => {
     let listener = e => {
       setNavMode(_ => false)
@@ -465,6 +466,12 @@ let make = () => {
         switch activeElement->closest(".key") {
         | Some(key) => key->blur
         | None => ()
+        }
+        // an open tile keeps the letter (its click places it); anywhere else
+        // clears the selection so nothing stays highlighted
+        switch e->pointerTarget->closest(".tile.open") {
+        | Some(_) => ()
+        | None => setSelected(_ => "")
         }
       }
     }

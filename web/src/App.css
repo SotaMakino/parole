@@ -974,7 +974,7 @@
 .username {
   font: inherit;
   font-weight: 700; /* a bit bold */
-  color: #d6336c; /* red-pink */
+  color: #b31e52; /* deep raspberry — WCAG AA on the pink paper (~4.9:1) */
   background: none;
   border: none;
   padding: 0;
@@ -1135,7 +1135,7 @@
 }
 
 .app-footer .footer-links a {
-  color: rgba(58, 43, 40, 0.6);
+  color: rgba(58, 43, 40, 0.82); /* darker gray-brown — WCAG AA on the pink paper */
   text-decoration: none;
 }
 

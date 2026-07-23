@@ -141,6 +141,12 @@ let make = () => {
   | Some(acc) => acc.learned
   | None => 0
   }
+  // only signed-in accounts may call the Cloud TTS endpoint; guests fall back to
+  // the browser voice (see Speech.speakWord)
+  let authenticated = switch account {
+  | Some(acc) => !acc.guest
+  | None => false
+  }
 
   // tick the learned tally up from zero while the overlay is open
   React.useEffect2(() => {
@@ -475,7 +481,7 @@ let make = () => {
                       className="speak"
                       title={I18n.pronounce(uiLang, p.prompt)}
                       ariaLabel={I18n.pronounce(uiLang, p.prompt)}
-                      onClick={_ => Speech.speakWord(p.prompt, promptLang)}>
+                      onClick={_ => Speech.speakWord(p.prompt, promptLang, ~authenticated)}>
                       {React.string(`🔊`)}
                     </button>
                     {React.string(p.prompt)}

@@ -46,7 +46,6 @@ func main() {
 	mux.HandleFunc("POST /signup", a.Signup)
 	mux.HandleFunc("POST /login", a.Login)
 	mux.HandleFunc("POST /logout", a.Logout)
-	mux.HandleFunc("GET /tts", t.Speak) // Italian word pronunciation (Google Cloud TTS)
 
 	// no login required — an anonymous "player" cookie identifies each browser
 	game := http.NewServeMux()
@@ -61,6 +60,10 @@ func main() {
 	mux.Handle("GET /me", middleware.Player(db, http.HandlerFunc(h.Me)))
 	// deleting an account needs a real session, not just a guest cookie
 	mux.Handle("DELETE /me", middleware.Auth(db, http.HandlerFunc(a.DeleteAccount)))
+	// Cloud TTS is for signed-in accounts only; guests fall back to the browser's
+	// built-in speechSynthesis client-side. Gating it keeps synthesis cost tied to
+	// real accounts rather than anonymous traffic.
+	mux.Handle("GET /tts", middleware.Auth(db, http.HandlerFunc(t.Speak))) // Italian word pronunciation (Google Cloud TTS)
 
 	allowedOrigins := strings.Split(env("ALLOWED_ORIGIN", "http://localhost:5173"), ",")
 	srv := &http.Server{

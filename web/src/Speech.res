@@ -7,9 +7,11 @@
 // uses speechSynthesis. Other browsers (Firefox, Safari) only expose the
 // low-quality "compact" voice, so there Italian is fetched as natural Google
 // Cloud TTS audio from our backend's /tts endpoint and played through an
-// <audio> element. Sending only non-Chromium browsers to the API keeps its
-// usage (and cost) down. If that fetch fails (backend down or TTS
-// unconfigured) we fall back to browser speech, so a word still plays.
+// <audio> element. The /tts endpoint is limited to signed-in accounts, so only
+// authenticated non-Chromium users reach it; guests fall back to browser
+// speech. Sending only that slice to the API keeps its usage (and cost) down.
+// If the fetch fails (backend down or TTS unconfigured) we also fall back to
+// browser speech, so a word still plays.
 
 // --- browser speechSynthesis (English, and the Italian fallback) ---
 type utterance
@@ -81,12 +83,14 @@ let isItalian = langCode => langCode->Js.String2.toLowerCase->Js.String2.startsW
 // built-in Italian voice" signal — no UA-string sniffing needed.
 let isChromium: bool = %raw(`typeof navigator !== "undefined" && navigator.userAgentData != null`)
 
-// pronounce a word in the given BCP-47 voice ("it-IT" or "en-US")
-let speakWord = (word, langCode) => {
+// pronounce a word in the given BCP-47 voice ("it-IT" or "en-US").
+// ~authenticated gates the Cloud TTS endpoint: guests can't call it, so they
+// always get the browser voice.
+let speakWord = (word, langCode, ~authenticated) => {
   cancel() // cut off any browser speech still playing
   stopAudio() // and any TTS audio still playing
 
-  if isItalian(langCode) && !isChromium {
+  if isItalian(langCode) && !isChromium && authenticated {
     let w = word->Js.String2.toLowerCase
     let url = `${ApiClient.api}/tts?lang=it-IT&word=${encodeURIComponent(w)}`
     let a = makeAudio(url)

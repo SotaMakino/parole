@@ -304,7 +304,7 @@
   font-weight: 700;
   color: var(--text-h);
   text-transform: lowercase;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
 }
 
 .tile.revealed {
@@ -320,6 +320,29 @@
 .tile.open:hover {
   border-color: var(--accent-border);
   background: var(--accent-bg);
+}
+
+/* a letter is in hand (dragging, or picked from the keyboard): show every
+   empty slot as an available target — the only cue touch users get, since
+   there is no hover on a touchscreen */
+.tile.open.armed {
+  border-style: dashed;
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+/* the exact slot under the dragged letter, called out above the rest */
+.tile.open.drop-hover {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  transform: scale(1.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile.open.drop-hover {
+    transform: none;
+  }
 }
 
 @media (max-width: 560px) {
@@ -427,6 +450,10 @@
 
 .key:enabled {
   cursor: grab;
+}
+
+.key:enabled:active {
+  cursor: grabbing;
 }
 
 .key:disabled {

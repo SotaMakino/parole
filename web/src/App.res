@@ -278,6 +278,11 @@ let make = () => {
   }
 
   let dragged = React.useRef("")
+  // a letter is "in hand" while dragging or while one is selected from the
+  // keyboard; open slots light up so the player can see where it can go
+  let (dragging, setDragging) = React.useState(() => false)
+  // the (wordIndex, position) currently under an active drag, highlighted extra
+  let (dropTarget, setDropTarget) = React.useState(() => None)
 
   // the physical keyboard listener mounts once, so route events through a ref
   // that always points at the latest render's handler
@@ -503,12 +508,22 @@ let make = () => {
                       letter == ""
                         ? <div
                             key={i->Belt.Int.toString}
-                            className="tile open"
+                            className={
+                              let armed = selected != "" || dragging
+                              "tile open" ++
+                              (armed ? " armed" : "") ++
+                              (dropTarget == Some((wi, i)) ? " drop-hover" : "")
+                            }
                             onDragOver={e => ReactEvent.Mouse.preventDefault(e)}
+                            onDragEnter={_ => setDropTarget(_ => Some((wi, i)))}
+                            onDragLeave={_ =>
+                              setDropTarget(t => t == Some((wi, i)) ? None : t)}
                             onDrop={e => {
                               ReactEvent.Mouse.preventDefault(e)
                               let l = dragged.current
                               dragged.current = ""
+                              setDragging(_ => false)
+                              setDropTarget(_ => None)
                               placeLetter(l, wi, i)->ignore
                             }}
                             onClick={_ => placeLetter(selected, wi, i)->ignore}
@@ -571,6 +586,13 @@ let make = () => {
                     onDragStart={e => {
                       e->dataTransfer->setData("text/plain", letter)
                       dragged.current = letter
+                      setDragging(_ => true)
+                    }}
+                    onDragEnd={_ => {
+                      // a drag can end without a drop (dropped off-target); reset
+                      dragged.current = ""
+                      setDragging(_ => false)
+                      setDropTarget(_ => None)
                     }}
                     onClick={_ => setSelected(s => s == letter ? "" : letter)}>
                     {React.string(letter)}

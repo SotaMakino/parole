@@ -363,55 +363,6 @@
   }
 }
 
-/* --- Typed letters --- */
-
-.typed {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin: 1.25rem auto 0;
-}
-
-.typed-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-right: 0.35rem;
-}
-
-.typed-empty {
-  font-size: 13px;
-  font-style: italic;
-}
-
-.chip {
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-  text-transform: lowercase;
-}
-
-.chip.miss {
-  background: #787c7e;
-  opacity: 0.75;
-}
-
-@media (prefers-color-scheme: dark) {
-  .chip.miss {
-    background: #3a3a3c;
-  }
-}
-
 /* --- Keyboard --- */
 
 .keyboard {
@@ -476,7 +427,7 @@
   text-align: center;
   font-size: 14px;
   color: var(--text-h);
-  margin: 0.75rem 0 0;
+  margin: 0.75rem 0;
   /* reserve exactly one line so guess feedback never shifts the layout; the
      unitless line-height makes the empty and filled heights match */
   line-height: 1.4;
@@ -912,13 +863,11 @@
   font-style: italic;
 }
 
-.notice,
-.typed-empty {
+.notice {
   font-style: italic;
 }
 
-.tries-label,
-.typed-label {
+.tries-label {
   font-family: var(--sans);
   letter-spacing: 2px;
 }
@@ -931,7 +880,6 @@
 .auth,
 .tile,
 .key,
-.chip,
 .banner,
 .error,
 .empty {

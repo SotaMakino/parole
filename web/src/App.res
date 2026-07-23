@@ -472,17 +472,6 @@ let make = () => {
             : uniqueColor
         let missCount = g.wrong->Belt.Array.length
         <>
-          <div className="tries">
-            <span className="tries-label"> {React.string(tr.mistakes)} </span>
-            {Belt.Array.makeBy(g.maxMisses, i =>
-              <span
-                key={i->Belt.Int.toString} className={i < missCount ? "try-dot spent" : "try-dot"}
-              />
-            )->React.array}
-            <span className="tries-count">
-              {React.string(`${missCount->Belt.Int.toString} / ${g.maxMisses->Belt.Int.toString}`)}
-            </span>
-          </div>
           <div className="pairs">
             {
               // the 🔊 pronounces the prompt word in its own language: Italian
@@ -545,24 +534,16 @@ let make = () => {
           // always rendered with reserved height, so guess feedback never
           // shifts the keyboard below it
           <p className="notice" role="alert"> {React.string(notice)} </p>
-          <div className="typed">
-            <span className="typed-label"> {React.string(tr.typed)} </span>
-            {g.guessed->Belt.Array.length == 0
-              ? <span className="typed-empty"> {React.string(tr.noLettersYet)} </span>
-              : g.guessed
-                ->Belt.Array.mapWithIndex((i, l) =>
-                  g.results->Belt.Array.get(i)->Belt.Option.getWithDefault(false)
-                    ? <span
-                        key={i->Belt.Int.toString}
-                        className="chip hit"
-                        style={{backgroundColor: tileColor(l)}}>
-                        {React.string(l)}
-                      </span>
-                    : <span key={i->Belt.Int.toString} className="chip miss">
-                        {React.string(l)}
-                      </span>
-                )
-                ->React.array}
+          <div className="tries">
+            <span className="tries-label"> {React.string(tr.mistakes)} </span>
+            {Belt.Array.makeBy(g.maxMisses, i =>
+              <span
+                key={i->Belt.Int.toString} className={i < missCount ? "try-dot spent" : "try-dot"}
+              />
+            )->React.array}
+            <span className="tries-count">
+              {React.string(`${missCount->Belt.Int.toString} / ${g.maxMisses->Belt.Int.toString}`)}
+            </span>
           </div>
           <div className="keyboard">
             {keyboardRows

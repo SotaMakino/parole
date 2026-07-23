@@ -2,7 +2,6 @@
 // "Le Cinque" (the paper's name) is never translated.
 type t = {
   connecting: string,
-  retry: string,
   serverWeak: string,
   signIn: string,
   account: string,
@@ -16,7 +15,8 @@ type t = {
   tagline: string,
   mistakes: string,
   wonBanner: string,
-  lostBanner: string,
+  lostBanner: array<string>, // one is shown at random when a round is lost
+  sayings: array<string>, // Southern Italian proverbs; one shown under the lost banner
   newGame: string,
   privacy: string,
   terms: string,
@@ -38,7 +38,6 @@ type t = {
 
 let it: t = {
   connecting: "Connessione al server…",
-  retry: "Riprova",
   serverWeak: "I nostri server sono un po' sovraccarichi. Riprova automatica tra 5 secondi.",
   signIn: "Accedi",
   account: "Account",
@@ -52,7 +51,25 @@ let it: t = {
   tagline: "Scegli una lettera e mettila esattamente al suo posto — trascinala, oppure tocca la lettera e poi la casella",
   mistakes: "Errori",
   wonBanner: "Bravo! Hai scoperto tutte e cinque le parole.",
-  lostBanner: "Cinque errori — partita finita. Studia le risposte; queste parole torneranno per il ripasso.",
+  lostBanner: [
+    "Cinque errori — riproviamo!",
+    "Tentativi finiti — pronti per un altro round?",
+    "Cinque errori. Ci riproviamo?",
+    "Cinque scivoloni — dai, riprova!",
+    "Niente più tentativi — riprovi?",
+  ],
+  sayings: [
+    "Cu nesci, arrinesci.",
+    "Cchiù scuru 'e mezzanotte nun pò venì.",
+    "Ogni scarrafone è bello a mamma soja.",
+    "Dicette 'o pappece vicino â noce: dammo tiempo ca te spertoso.",
+    "Cu joca sulu 'un perdi mai.",
+    "Chi tene 'a salute è ricco e nun 'o sape.",
+    "Megghiu un tintu canusciutu ca un bonu a canusciri.",
+    "Chi va cu' 'o zuoppo, 'mpara a zuppià.",
+    "A lavà 'a capa ô ciuccio se perde acqua e sapone.",
+    "Chi bella vò parè, guaje e pene adda patè.",
+  ],
   newGame: "Nuova partita",
   privacy: "Privacy",
   terms: "Termini",
@@ -74,7 +91,6 @@ let it: t = {
 
 let en: t = {
   connecting: "Connecting to server…",
-  retry: "Retry",
   serverWeak: "Our servers are a bit overloaded right now. Retrying automatically in 5 seconds.",
   signIn: "Sign in",
   account: "Account",
@@ -88,7 +104,25 @@ let en: t = {
   tagline: "Pick a letter and place it on its exact spot — drag it, or tap the letter then the tile",
   mistakes: "Mistakes",
   wonBanner: "Bravo! You revealed all five words.",
-  lostBanner: "Five mistakes — game over. Study the answers; these words will come back for review.",
+  lostBanner: [
+    "Five mistakes — let's try again.",
+    "Out of guesses — ready for another round?",
+    "Five misses. Shall we go again?",
+    "That's five slip-ups — give it another go.",
+    "No more chances this round — try again?",
+  ],
+  sayings: [
+    "Who leaves, succeeds.",
+    "It can't get any darker than midnight.",
+    "Every beetle is beautiful to its own mother.",
+    "Said the weevil to the walnut: give me time and I'll bore right through you.",
+    "Whoever plays alone never loses.",
+    "Whoever has health is rich and doesn't know it.",
+    "Better a known evil than an unknown good.",
+    "Walk with the lame and you'll learn to limp.",
+    "Washing a donkey's head only wastes the water and the soap.",
+    "To look beautiful, you must suffer trouble and pain.",
+  ],
   newGame: "New game",
   privacy: "Privacy",
   terms: "Terms",

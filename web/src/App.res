@@ -271,7 +271,6 @@ let make = () => {
   }
 
   let newGame = () => startRound("/game")
-  let retryGame = () => startRound("/game/retry")
 
   // tapping a flag re-deals the untouched round in that direction (the server
   // rejects it once a letter is placed, but the UI disables the flags by then)
@@ -755,19 +754,30 @@ let make = () => {
             ->React.array}
           </div>
           {
-            // a loss keeps the inline banner (retry + new game); a win gets the
+            // a loss keeps the inline banner (new game); a win gets the
             // full-screen night celebration overlay instead (rendered below)
             g.status == "lost"
               ? <div className="banner">
-                  <p> {React.string(tr.lostBanner)} </p>
+                  <p>
+                    {React.string(
+                      // stable per round (keyed on the game id), varied across rounds
+                      switch tr.lostBanner->Belt.Array.get(
+                        mod(g.id, Belt.Array.length(tr.lostBanner)),
+                      ) {
+                      | Some(m) => m
+                      | None => ""
+                      },
+                    )}
+                  </p>
+                  <p className="saying">
+                    {React.string(
+                      switch tr.sayings->Belt.Array.get(mod(g.id, Belt.Array.length(tr.sayings))) {
+                      | Some(s) => "“" ++ s ++ "”"
+                      | None => ""
+                      },
+                    )}
+                  </p>
                   <div className="banner-actions">
-                    <button
-                      type_="button"
-                      className="ghost"
-                      disabled=busy
-                      onClick={_ => retryGame()->ignore}>
-                      {React.string(tr.retry)}
-                    </button>
                     <button
                       type_="button"
                       className="primary"

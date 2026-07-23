@@ -218,10 +218,15 @@
   transition: opacity 0.15s, filter 0.15s, transform 0.1s;
 }
 
-.flag:hover {
+.flag:hover:enabled {
   opacity: 0.85;
   filter: none;
   transform: scale(1.2);
+}
+
+/* once the round is under way the flags lock — no hover feedback */
+.flag:disabled {
+  cursor: default;
 }
 
 .flag.active {
@@ -681,10 +686,19 @@
   color: var(--text-h);
   font-weight: 500;
   text-align: center;
-  margin: 0;
+  margin: 0.4rem 0 0;
 }
 
-/* second row: the retry / new-game buttons */
+/* a Southern Italian proverb, quieter than the message above it */
+.banner p.saying {
+  color: var(--text);
+  font-weight: 400;
+  font-style: italic;
+  font-size: 0.9rem;
+  margin-top: 0;
+}
+
+/* second row: the new-game button */
 .banner-actions {
   display: flex;
   align-items: center;
@@ -1037,7 +1051,7 @@
   text-align: center;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 4px;
   box-shadow: var(--shadow);
 }
 
@@ -1085,6 +1099,12 @@
 .menu-logout,
 .menu-delete {
   font-size: 14px;
+  transition: opacity 0.15s;
+}
+
+.menu-logout:hover,
+.menu-delete:hover {
+  opacity: 0.65;
 }
 
 .menu-logout {

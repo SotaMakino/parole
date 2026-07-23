@@ -80,6 +80,37 @@
   }
 }
 
+@media (max-width: 380px) {
+  .app-header h1 {
+    font-size: 40px;
+  }
+
+  .app-header {
+    margin-bottom: 1rem;
+  }
+
+  .dateline {
+    font-size: 9px;
+    letter-spacing: 0.3px;
+    gap: 0.3rem;
+  }
+}
+
+@media (max-width: 300px) {
+  .app-header h1 {
+    font-size: 32px;
+  }
+
+  .dateline {
+    font-size: 8px;
+    gap: 0.25rem;
+  }
+
+  .username {
+    max-width: 6rem;
+  }
+}
+
 /* --- Buttons --- */
 
 .primary,
@@ -390,6 +421,34 @@
   }
 }
 
+/* roomy screens: the play column is capped at 640px, so scale the pairs up to
+   fill it instead of floating small in the middle */
+@media (min-width: 768px) {
+  .pairs {
+    column-gap: 1.5rem;
+    row-gap: 12px;
+    margin-top: 1rem;
+  }
+
+  .italian {
+    font-size: 22px;
+  }
+
+  .speak {
+    font-size: 17px;
+  }
+
+  .english-tiles {
+    gap: 5px;
+  }
+
+  .tile {
+    width: 42px;
+    height: 42px;
+    font-size: 20px;
+  }
+}
+
 @media (max-width: 560px) {
   .pairs {
     column-gap: 0.75rem;
@@ -405,6 +464,65 @@
     height: 26px;
     font-size: 14px;
     border-width: 1.5px;
+  }
+}
+
+/* tiny phones (e.g. Unihertz Jelly 2, ~240px CSS-wide 3" screen): trim the
+   gutters and let the 10-key top row shrink so it never overflows */
+@media (max-width: 380px) {
+  .app {
+    padding: 0 0.5rem;
+  }
+
+  .pairs {
+    column-gap: 0.5rem;
+  }
+
+  .tile {
+    width: 22px;
+    height: 22px;
+    font-size: 12px;
+  }
+}
+
+/* on a ~240px screen even a 9-letter word plus its label won't fit side by
+   side without shrinking the tiles too far, so stack the word over its tiles
+   and give the row the full width */
+@media (max-width: 300px) {
+  .app {
+    padding: 0 0.35rem;
+  }
+
+  .pairs {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .pair-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .italian {
+    justify-content: center;
+    text-align: center;
+    font-size: 15px;
+    letter-spacing: 0.5px;
+  }
+
+  .english-tiles {
+    justify-self: auto;
+    gap: 3px;
+  }
+
+  .tile {
+    width: 22px;
+    height: 22px;
+    font-size: 12px;
   }
 }
 
@@ -464,6 +582,37 @@
 .key.selected {
   background: var(--accent);
   color: #fff;
+}
+
+/* tiny phones (e.g. Unihertz Jelly 2, ~240px CSS-wide 3" screen): let the
+   10-key top row shrink to fit instead of overflowing the viewport */
+@media (max-width: 380px) {
+  .keyboard {
+    gap: 4px;
+    margin-top: 1rem;
+  }
+
+  .kb-row {
+    gap: 3px;
+  }
+
+  .key {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 42px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 300px) {
+  .kb-row {
+    gap: 2px;
+  }
+
+  .key {
+    height: 38px;
+    font-size: 12px;
+  }
 }
 
 /* --- Notice & end-of-game banner --- */

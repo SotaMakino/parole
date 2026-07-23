@@ -212,7 +212,7 @@ let make = () => {
   }, [celebrating])
 
   let (selected, setSelected) = React.useState(() => "") // letter picked from the keyboard
-  let (tileCursor, setTileCursor) = React.useState(() => (None: option<(int, int)>)) // arrow-key cursor
+  let (tileCursor, setTileCursor) = React.useState((): option<(int, int)> => None) // arrow-key cursor
   let (navMode, setNavMode) = React.useState(() => false) // true while navigating tiles by arrow keys
 
   // place one letter on one exact tile
@@ -361,7 +361,9 @@ let make = () => {
         acc
       } else {
         switch acc {
-        | Some(a) => (keepLeft ? p > a : p < a) ? Some(p) : acc
+        | Some(a) =>
+          let closer = keepLeft ? p > a : p < a
+          closer ? Some(p) : acc
         | None => Some(p)
         }
       }
@@ -689,8 +691,9 @@ let make = () => {
                               dropId={`${wi->Belt.Int.toString}-${i->Belt.Int.toString}`}
                               className={"tile open" ++
                               (armed ? " armed" : "") ++
-                              (shake == Some((wi, i)) ? " shake" : "") ++
-                              (navMode && activeTile == Some((wi, i)) ? " tile-cursor" : "")}
+                              (shake == Some((wi, i)) ? " shake" : "") ++ (
+                                navMode && activeTile == Some((wi, i)) ? " tile-cursor" : ""
+                              )}
                               armed
                               onClick={_ => placeLetter(selected, wi, i)->ignore}
                             />

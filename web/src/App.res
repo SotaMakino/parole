@@ -45,12 +45,6 @@ let keyboardRows = [
 let uniqueColor = "#cd212a" // flag red
 let repeatedColor = "#008c45" // flag green
 
-// HTML5 drag&drop: Firefox refuses to drag without setData, and the letter
-// itself travels in a ref so the drop handler can read it synchronously
-type dataTransfer
-@get external dataTransfer: ReactEvent.Mouse.t => dataTransfer = "dataTransfer"
-@send external setData: (dataTransfer, string, string) => unit = "setData"
-
 @react.component
 let make = () => {
   let (game, setGame) = React.useState(() => None)
@@ -277,12 +271,28 @@ let make = () => {
     }
   }
 
-  let dragged = React.useRef("")
   // a letter is "in hand" while dragging or while one is selected from the
   // keyboard; open slots light up so the player can see where it can go
   let (dragging, setDragging) = React.useState(() => false)
-  // the (wordIndex, position) currently under an active drag, highlighted extra
-  let (dropTarget, setDropTarget) = React.useState(() => None)
+  let sensors = DndKit.useDefaultSensors()
+
+  // dnd-kit reports the drop by ids: the dragged letter and the tile's
+  // "wordIndex-position". A drag that ends off any tile leaves over null.
+  let handleDragEnd = (e: DndKit.dragEndEvent) => {
+    setDragging(_ => false)
+    switch e.over->Js.Nullable.toOption {
+    | Some(over) =>
+      switch over.id->Js.String2.split("-") {
+      | [ws, ps] =>
+        switch (Belt.Int.fromString(ws), Belt.Int.fromString(ps)) {
+        | (Some(wi), Some(pos)) => placeLetter(e.active.id, wi, pos)->ignore
+        | _ => ()
+        }
+      | _ => ()
+      }
+    | None => ()
+    }
+  }
 
   // the physical keyboard listener mounts once, so route events through a ref
   // that always points at the latest render's handler
@@ -471,7 +481,11 @@ let make = () => {
             ? repeatedColor
             : uniqueColor
         let missCount = g.wrong->Belt.Array.length
-        <>
+        <DndKit.DndContext
+          sensors
+          onDragStart={_ => setDragging(_ => true)}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => setDragging(_ => false)}>
           <div className="pairs">
             {
               // the 🔊 pronounces the prompt word in its own language: Italian
@@ -495,28 +509,16 @@ let make = () => {
                     {p.tiles
                     ->Belt.Array.mapWithIndex((i, letter) =>
                       letter == ""
-                        ? <div
-                            key={i->Belt.Int.toString}
-                            className={
-                              let armed = selected != "" || dragging
-                              "tile open" ++
-                              (armed ? " armed" : "") ++
-                              (dropTarget == Some((wi, i)) ? " drop-hover" : "")
-                            }
-                            onDragOver={e => ReactEvent.Mouse.preventDefault(e)}
-                            onDragEnter={_ => setDropTarget(_ => Some((wi, i)))}
-                            onDragLeave={_ =>
-                              setDropTarget(t => t == Some((wi, i)) ? None : t)}
-                            onDrop={e => {
-                              ReactEvent.Mouse.preventDefault(e)
-                              let l = dragged.current
-                              dragged.current = ""
-                              setDragging(_ => false)
-                              setDropTarget(_ => None)
-                              placeLetter(l, wi, i)->ignore
-                            }}
-                            onClick={_ => placeLetter(selected, wi, i)->ignore}
-                          />
+                        ? {
+                            let armed = selected != "" || dragging
+                            <DndKit.Droppable
+                              key={i->Belt.Int.toString}
+                              dropId={`${wi->Belt.Int.toString}-${i->Belt.Int.toString}`}
+                              className={"tile open" ++ (armed ? " armed" : "")}
+                              armed
+                              onClick={_ => placeLetter(selected, wi, i)->ignore}
+                            />
+                          }
                         : <div
                             key={i->Belt.Int.toString}
                             className="tile revealed"
@@ -558,26 +560,15 @@ let make = () => {
                   | (false, true) => "key selected"
                   | _ => "key"
                   }
-                  <button
+                  <DndKit.Draggable
                     key=letter
-                    type_="button"
+                    letter
+                    label=letter
                     className=cls
                     disabled=usedUp
-                    draggable={!usedUp && g.status == "playing"}
-                    onDragStart={e => {
-                      e->dataTransfer->setData("text/plain", letter)
-                      dragged.current = letter
-                      setDragging(_ => true)
-                    }}
-                    onDragEnd={_ => {
-                      // a drag can end without a drop (dropped off-target); reset
-                      dragged.current = ""
-                      setDragging(_ => false)
-                      setDropTarget(_ => None)
-                    }}
-                    onClick={_ => setSelected(s => s == letter ? "" : letter)}>
-                    {React.string(letter)}
-                  </button>
+                    dragDisabled={usedUp || g.status != "playing"}
+                    onClick={_ => setSelected(s => s == letter ? "" : letter)}
+                  />
                 })
                 ->React.array}
               </div>
@@ -609,7 +600,7 @@ let make = () => {
                 </div>
               : React.null
           }
-        </>
+        </DndKit.DndContext>
       }
       <Fireworks bursts />
       {

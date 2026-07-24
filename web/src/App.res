@@ -596,13 +596,22 @@ let make = () => {
                                     switch Belt.Array.get(acc.activity, i) {
                                     | Some(c) =>
                                       let lvl =
-                                        c <= 0 ? "0" : c <= 2 ? "1" : c <= 5 ? "2" : c <= 9 ? "3" : "4"
+                                        c <= 0
+                                          ? "0"
+                                          : c <= 2
+                                          ? "1"
+                                          : c <= 5
+                                          ? "2"
+                                          : c <= 9
+                                          ? "3"
+                                          : "4"
                                       <div
-                                        key={row->Belt.Int.toString}
-                                        className={"cal-day l" ++ lvl}
+                                        key={row->Belt.Int.toString} className={"cal-day l" ++ lvl}
                                       />
                                     | None =>
-                                      <div key={row->Belt.Int.toString} className="cal-day cal-empty" />
+                                      <div
+                                        key={row->Belt.Int.toString} className="cal-day cal-empty"
+                                      />
                                     }
                                   })->React.array}
                                 </div>

@@ -17,8 +17,9 @@ const (
 	WordsPerRound = 5
 	// the fifth wrong placement ends the round as lost
 	MaxMisses = 5
-	// a lost round's words return once this many later rounds have been played
-	ReviewGap = 3
+	// a word just seen is held back this long, so a run of rounds in one sitting
+	// cannot bring a review back minutes after its first encounter
+	SessionGap = 2 * time.Hour
 )
 
 // reviewDays is the gap before a retrieved word comes back, in days, indexed by
@@ -111,36 +112,6 @@ func (h *Games) latest(user string) (*game, error) {
 	return g, err
 }
 
-// history replays a user's finished rounds: every word of a round shares the
-// round's outcome, and later rounds overwrite earlier ones.
-type outcome struct {
-	round int // 1-based index of the user's finished rounds
-	won   bool
-}
-
-func (h *Games) history(user string) (map[string]outcome, int, error) {
-	rows, err := h.DB.Query(
-		"SELECT word, status FROM games WHERE username = $1 AND status <> 'playing' ORDER BY id",
-		user)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-	last := map[string]outcome{}
-	round := 0
-	for rows.Next() {
-		var joined, status string
-		if err := rows.Scan(&joined, &status); err != nil {
-			return nil, 0, err
-		}
-		round++
-		for _, w := range strings.Split(joined, ",") {
-			last[w] = outcome{round, status == "won"}
-		}
-	}
-	return last, round, rows.Err()
-}
-
 // review is a player's record for one word: when it is due again, when they
 // last saw it, and how many times running they have retrieved it.
 type review struct {
@@ -208,52 +179,75 @@ func (h *Games) recordReviews(user string, g *game, attempts []attempt) error {
 }
 
 // nextWords picks a round's words. Priority:
-//  1. spaced repetition — words lost at least ReviewGap finished rounds ago
-//     and not won since (oldest miss first)
-//  2. words the user has never played, in curriculum order — words.tsv is
+//  1. review — words whose due date has arrived, most overdue first. Words the
+//     player got right are scheduled too, not only the ones they missed:
+//     retrieving a word is what fixes it in memory, so a word that stops being
+//     tested is a word being forgotten.
+//  2. words the player has never met, in curriculum order — words.tsv is
 //     ordered most-essential first, so beginners meet the core words soonest
-//  3. not-yet-won words played longest ago (losses not due yet)
-//  4. everything is won: recycle the words won longest ago
+//  3. filler, once the curriculum runs out: whatever was seen longest ago
+//
+// A word seen within SessionGap is held back from every tier, so a long sitting
+// cannot stack a review right behind its first encounter. That guard relaxes on
+// a second pass rather than deal a short round.
 func (h *Games) nextWords(user string) ([]string, error) {
-	last, round, err := h.history(user)
+	revs, err := h.reviews(user)
 	if err != nil {
 		return nil, err
 	}
+	at := now()
 
 	picked := []string{}
 	taken := map[string]bool{}
-	take := func(w string) {
-		if !taken[w] && len(picked) < WordsPerRound {
-			taken[w] = true
-			picked = append(picked, w)
+	relaxed := false
+	take := func(v vocab) {
+		if len(picked) >= WordsPerRound || taken[v.Italian] {
+			return
 		}
-	}
-	// repeatedly take the oldest-round word matching, until none match
-	takeOldest := func(match func(outcome) bool) {
-		for len(picked) < WordsPerRound {
-			best, bestRound := "", round+1
-			for _, v := range words {
-				o, seen := last[v.Italian]
-				if seen && !taken[v.Italian] && match(o) && o.round < bestRound {
-					best, bestRound = v.Italian, o.round
-				}
-			}
-			if best == "" {
+		if !relaxed {
+			if r, ok := revs[v.Italian]; ok && at.Sub(r.lastSeen) < SessionGap {
 				return
 			}
-			take(best)
 		}
+		taken[v.Italian] = true
+		picked = append(picked, v.Italian)
 	}
 
-	takeOldest(func(o outcome) bool { return !o.won && round-o.round >= ReviewGap })
-	// unseen words, most-essential first (words.tsv order)
+	due := []vocab{}
+	seen := []vocab{}
 	for _, v := range words {
-		if _, seen := last[v.Italian]; !seen {
-			take(v.Italian)
+		r, ok := revs[v.Italian]
+		if !ok {
+			continue
+		}
+		seen = append(seen, v)
+		if !r.dueAt.After(at) {
+			due = append(due, v)
 		}
 	}
-	takeOldest(func(o outcome) bool { return !o.won })
-	takeOldest(func(o outcome) bool { return true })
+	sort.SliceStable(due, func(i, j int) bool {
+		return revs[due[i].Italian].dueAt.Before(revs[due[j].Italian].dueAt)
+	})
+	sort.SliceStable(seen, func(i, j int) bool {
+		return revs[seen[i].Italian].lastSeen.Before(revs[seen[j].Italian].lastSeen)
+	})
+
+	fill := func() {
+		for _, v := range due {
+			take(v)
+		}
+		for _, v := range words {
+			if _, met := revs[v.Italian]; !met {
+				take(v)
+			}
+		}
+		for _, v := range seen {
+			take(v)
+		}
+	}
+	fill()
+	relaxed = true
+	fill()
 	return picked, nil
 }
 

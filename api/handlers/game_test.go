@@ -158,16 +158,6 @@ func decodeState(t *testing.T, rec *httptest.ResponseRecorder) gameState {
 	return s
 }
 
-func curriculum(i int) string { return words[i].Italian }
-
-func firstN(n int) []string {
-	ws := make([]string, n)
-	for i := range ws {
-		ws[i] = curriculum(i)
-	}
-	return ws
-}
-
 func TestWords_UppercaseAndUnique(t *testing.T) {
 	if len(words) < 500 {
 		t.Errorf("expected at least 500 words, got %d", len(words))
@@ -675,70 +665,77 @@ func TestCurrentGame_ScopedToUser(t *testing.T) {
 	}
 }
 
-func TestNextWords_RandomButNeverRepeatsPlayedWords(t *testing.T) {
+func TestNextWords_DueWordsLeadTheRound(t *testing.T) {
 	h := setupGames(t)
-	finishRound(t, h, "ann", firstN(5), "won")
+	at := time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC)
+	freezeClock(t, at)
+
+	// a word retrieved three days ago and due yesterday — won, not missed, and
+	// still scheduled: retrieval is what keeps it, so it comes back
+	setReview(t, h, "ann", "GATTO", at.AddDate(0, 0, -1), at.AddDate(0, 0, -3), 2)
+	// and one whose next review is still a fortnight out
+	setReview(t, h, "ann", "CANE", at.AddDate(0, 0, 14), at.AddDate(0, 0, -7), 3)
+
+	ws, err := h.nextWords("ann")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ws) == 0 || ws[0] != "GATTO" {
+		t.Errorf("expected the overdue GATTO to lead the round, got %v", ws)
+	}
+	for _, w := range ws {
+		if w == "CANE" {
+			t.Errorf("CANE is not due for two weeks but was served: %v", ws)
+		}
+	}
+}
+
+func TestNextWords_HeldBackWithinTheSession(t *testing.T) {
+	h := setupGames(t)
+	at := time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC)
+	freezeClock(t, at)
+
+	// due, but only just seen: a run of rounds in one sitting must not stack a
+	// review minutes behind its first encounter
+	setReview(t, h, "ann", "GATTO", at.Add(-time.Minute), at.Add(-time.Minute), 0)
+
+	ws, err := h.nextWords("ann")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range ws {
+		if w == "GATTO" {
+			t.Errorf("GATTO was seen a minute ago and must wait: %v", ws)
+		}
+	}
+
+	// the next session picks it up
+	freezeClock(t, at.Add(SessionGap+time.Minute))
+	ws, err = h.nextWords("ann")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ws) == 0 || ws[0] != "GATTO" {
+		t.Errorf("expected GATTO once the session gap passed, got %v", ws)
+	}
+}
+
+func TestNextWords_FillsTheRoundWhenGuardsCollide(t *testing.T) {
+	h := setupGames(t)
+	at := time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC)
+	freezeClock(t, at)
+
+	// every word seen moments ago: the guards would starve the round, so they
+	// relax rather than deal fewer than five words
+	for _, v := range words {
+		setReview(t, h, "ann", v.Italian, at, at, 1)
+	}
 
 	ws, err := h.nextWords("ann")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(ws) != WordsPerRound {
-		t.Fatalf("expected %d words, got %v", WordsPerRound, ws)
-	}
-	played := map[string]bool{}
-	for _, w := range firstN(5) {
-		played[w] = true
-	}
-	seen := map[string]bool{}
-	for _, w := range ws {
-		if english[w] == "" {
-			t.Errorf("%q is not in the word list", w)
-		}
-		if played[w] {
-			t.Errorf("%q was already won and must not repeat yet", w)
-		}
-		if seen[w] {
-			t.Errorf("%q served twice in one round", w)
-		}
-		seen[w] = true
-	}
-}
-
-func TestNextWords_MissedRoundComesBackAfterGap(t *testing.T) {
-	h := setupGames(t)
-	finishRound(t, h, "ann", firstN(5), "lost")
-	for i := 0; i < ReviewGap; i++ {
-		finishRound(t, h, "ann", firstN(5 * (i + 2))[5*(i+1):], "won")
-	}
-
-	ws, err := h.nextWords("ann")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Join(ws, ",") != strings.Join(firstN(5), ",") {
-		t.Errorf("expected the missed words %v to return, got %v", firstN(5), ws)
-	}
-}
-
-func TestNextWords_MissedRoundNotDueYet(t *testing.T) {
-	h := setupGames(t)
-	finishRound(t, h, "ann", firstN(5), "lost")
-	finishRound(t, h, "ann", firstN(10)[5:], "won")
-
-	ws, err := h.nextWords("ann")
-	if err != nil {
-		t.Fatal(err)
-	}
-	// the loss is only one round old, so none of the ten played words may
-	// appear yet — the round must be filled from unseen words instead
-	played := map[string]bool{}
-	for _, w := range firstN(10) {
-		played[w] = true
-	}
-	for _, w := range ws {
-		if played[w] {
-			t.Errorf("%q is not due yet but was served: %v", w, ws)
-		}
+		t.Errorf("expected a full round even under the guards, got %v", ws)
 	}
 }

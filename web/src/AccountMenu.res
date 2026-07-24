@@ -13,7 +13,6 @@ external toLocaleDate: (
 @react.component
 let make = (
   ~lang,
-  ~username: string,
   ~learned: int,
   ~activity: array<int>,
   ~activityStart: string,
@@ -25,7 +24,6 @@ let make = (
   <>
     <div className="menu-backdrop" onClick={_ => onClose()} />
     <div className="account-menu" role="dialog">
-      <p className="menu-name"> {React.string(username)} </p>
       <div className="menu-stat">
         <span className="menu-count"> {React.string(learned->Belt.Int.toString)} </span>
         <span className="menu-label"> {React.string(tr.wordsLearned)} </span>

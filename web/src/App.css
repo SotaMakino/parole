@@ -1055,16 +1055,6 @@
   box-shadow: var(--shadow);
 }
 
-.menu-name {
-  font-size: 19px;
-  font-weight: 700;
-  color: var(--text-h);
-  padding-bottom: 0.6rem;
-  margin-bottom: 0.75rem;
-  border-bottom: 1px solid var(--border);
-  overflow-wrap: anywhere;
-}
-
 .menu-stat {
   display: flex;
   flex-direction: column;

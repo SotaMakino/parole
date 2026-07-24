@@ -562,7 +562,6 @@ let make = () => {
                   ? React.null
                   : <AccountMenu
                       lang=uiLang
-                      username=acc.username
                       learned=acc.learned
                       activity=acc.activity
                       activityStart=acc.activityStart

@@ -165,13 +165,14 @@ func (h *Games) recordReviews(user string, g *game, attempts []attempt) error {
 			due = dueAfter(at, streak)
 		}
 		if _, err := h.DB.Exec(
-			`INSERT INTO word_reviews (username, word, due_at, last_seen, streak)
-			 VALUES ($1, $2, $3, $4, $5)
+			`INSERT INTO word_reviews (username, word, due_at, last_seen, streak, learned)
+			 VALUES ($1, $2, $3, $4, $5, $6)
 			 ON CONFLICT (username, word) DO UPDATE SET
 			   due_at = EXCLUDED.due_at,
 			   last_seen = EXCLUDED.last_seen,
-			   streak = EXCLUDED.streak`,
-			user, w, due, at, streak); err != nil {
+			   streak = EXCLUDED.streak,
+			   learned = word_reviews.learned OR EXCLUDED.learned`,
+			user, w, due, at, streak, retrieved[wi]); err != nil {
 			return err
 		}
 	}
@@ -459,7 +460,7 @@ func (h *Games) Me(w http.ResponseWriter, r *http.Request) {
 	authed := middleware.Authenticated(r)
 	var learned int
 	err := h.DB.QueryRow(
-		"SELECT COUNT(*) FROM word_reviews WHERE username = $1 AND streak > 0", user).Scan(&learned)
+		"SELECT COUNT(*) FROM word_reviews WHERE username = $1 AND learned", user).Scan(&learned)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "query failed")
 		return

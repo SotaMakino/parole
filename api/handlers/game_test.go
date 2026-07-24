@@ -46,11 +46,12 @@ func freezeClock(t *testing.T, at time.Time) {
 func setReview(t *testing.T, h *Games, user, word string, dueAt, lastSeen time.Time, streak int) {
 	t.Helper()
 	if _, err := h.DB.Exec(
-		`INSERT INTO word_reviews (username, word, due_at, last_seen, streak)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO word_reviews (username, word, due_at, last_seen, streak, learned)
+		 VALUES ($1, $2, $3, $4, $5, $6)
 		 ON CONFLICT (username, word) DO UPDATE SET
-		   due_at = EXCLUDED.due_at, last_seen = EXCLUDED.last_seen, streak = EXCLUDED.streak`,
-		user, word, dueAt, lastSeen, streak); err != nil {
+		   due_at = EXCLUDED.due_at, last_seen = EXCLUDED.last_seen, streak = EXCLUDED.streak,
+		   learned = word_reviews.learned OR EXCLUDED.learned`,
+		user, word, dueAt, lastSeen, streak, streak > 0); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -565,6 +566,31 @@ func TestMe_CountsRetrievedWordsOnly(t *testing.T) {
 	}
 	if body.Username != "ann" || body.Learned != 3 {
 		t.Errorf("expected ann with 3 learned, got %+v", body)
+	}
+}
+
+// A word the player retrieved once stays in the vocabulary tally even after a
+// later round reveals it for free and resets its streak to 0. Without the sticky
+// "learned" flag the count would churn instead of only growing.
+func TestMe_KeepsLearnedWordAfterStreakReset(t *testing.T) {
+	h := setupGames(t)
+	at := time.Now()
+	// retrieved once (streak 1), then revealed for free in a later round: the
+	// scheduler drops the streak back to 0 but the word is still learned
+	setReview(t, h, "ann", "TRENO", at, at, 1)
+	setReview(t, h, "ann", "TRENO", at, at, 0)
+
+	rec := httptest.NewRecorder()
+	h.Me(rec, asUser("ann", "GET", "/me", ""))
+
+	var body struct {
+		Learned int `json:"learned"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Learned != 1 {
+		t.Errorf("expected 1 learned after streak reset, got %d", body.Learned)
 	}
 }
 

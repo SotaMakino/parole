@@ -46,6 +46,14 @@ func Open(url string) (*sql.DB, error) {
 		streak INT NOT NULL DEFAULT 0,
 		PRIMARY KEY (username, word)
 	)`)
+	// "learned" is sticky: once the player retrieves a word themselves it stays
+	// true forever, so the vocabulary tally only grows. streak, by contrast,
+	// resets to 0 when a word is later revealed for free — that governs review
+	// scheduling, not whether the word has ever been learned.
+	_, err = db.Exec(`ALTER TABLE word_reviews ADD COLUMN IF NOT EXISTS learned BOOLEAN NOT NULL DEFAULT false`)
+	// backfill: any word currently on a positive streak has been retrieved at
+	// least once. Sets true only; never unsets, so it is safe to run each start.
+	_, err = db.Exec(`UPDATE word_reviews SET learned = true WHERE streak > 0 AND NOT learned`)
 	// one row per day the player studied, holding how many words they genuinely
 	// retrieved that day — the source for the GitHub-style activity calendar
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS study_days (
@@ -59,8 +67,8 @@ func Open(url string) (*sql.DB, error) {
 	// count and their words re-enter the review rotation instead of being dealt
 	// as if never met. ON CONFLICT keeps this idempotent: a word that already
 	// has a record is left on whatever rung it has reached.
-	_, err = db.Exec(`INSERT INTO word_reviews (username, word, due_at, last_seen, streak)
-		SELECT username, w, now(), now(), 1 FROM (
+	_, err = db.Exec(`INSERT INTO word_reviews (username, word, due_at, last_seen, streak, learned)
+		SELECT username, w, now(), now(), 1, true FROM (
 			SELECT username, unnest(string_to_array(word, ',')) AS w
 			FROM games WHERE status = 'won'
 		) t

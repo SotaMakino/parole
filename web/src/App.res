@@ -6,7 +6,14 @@ type pair = {prompt: string, tiles: array<string>}
 
 // guest = true means anonymous play; a signed-in account shows its name + count.
 // plays is the global tally of rounds dealt (all players), shown as the issue N.
-type me = {username: string, learned: int, guest: bool, plays: int, activity: array<int>}
+type me = {
+  username: string,
+  learned: int,
+  guest: bool,
+  plays: int,
+  activity: array<int>, // dense daily retrieval counts, oldest first (a Sunday)
+  activityStart: string, // ISO date of activity[0], so each cell can be dated
+}
 
 type game = {
   id: int,
@@ -49,6 +56,15 @@ type domNode
 @send @return(nullable) external closest: (domNode, string) => option<domNode> = "closest"
 @send external blur: domNode => unit = "blur"
 @val @scope("document") external activeElement: domNode = "activeElement"
+
+// localized "24 Jul 2026" for a heatmap cell's tooltip; timeZone UTC keeps the
+// date matching the calendar day regardless of the viewer's zone
+@send
+external toLocaleDate: (
+  Js.Date.t,
+  string,
+  {"day": string, "month": string, "year": string, "timeZone": string},
+) => string = "toLocaleDateString"
 
 let keyboardRows = [
   ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
@@ -589,6 +605,11 @@ let make = () => {
                               // dense daily counts starting on a Sunday: chunk into
                               // week columns, one cell per weekday (Sun→Sat)
                               let cols = (Belt.Array.length(acc.activity) + 6) / 7
+                              let locale = uiLang == #it ? "it-IT" : "en-US"
+                              let startMs =
+                                Js.Date.fromString(
+                                  acc.activityStart ++ "T00:00:00Z",
+                                )->Js.Date.getTime
                               Belt.Array.makeBy(cols, col =>
                                 <div className="cal-week" key={col->Belt.Int.toString}>
                                   {Belt.Array.makeBy(7, row => {
@@ -605,8 +626,26 @@ let make = () => {
                                           : c <= 9
                                           ? "3"
                                           : "4"
+                                      // "3 words · 24 Jul 2026" — the day's tally and date
+                                      let date = Js.Date.fromFloat(
+                                        startMs +. i->Belt.Int.toFloat *. 86400000.,
+                                      )
+                                      let dateStr = date->toLocaleDate(
+                                        locale,
+                                        {
+                                          "day": "numeric",
+                                          "month": "short",
+                                          "year": "numeric",
+                                          "timeZone": "UTC",
+                                        },
+                                      )
+                                      let word = c == 1 ? tr.dayWord : tr.dayWords
+                                      let title =
+                                        c->Belt.Int.toString ++ " " ++ word ++ " · " ++ dateStr
                                       <div
-                                        key={row->Belt.Int.toString} className={"cal-day l" ++ lvl}
+                                        key={row->Belt.Int.toString}
+                                        className={"cal-day l" ++ lvl}
+                                        title
                                       />
                                     | None =>
                                       <div

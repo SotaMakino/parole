@@ -702,10 +702,14 @@ func TestRecordReviews_TalliesTheStudyDay(t *testing.T) {
 		t.Errorf("expected %d retrievals tallied, got %d", len(testRound), count)
 	}
 
-	// and it surfaces on the activity calendar's final (today) cell
-	cal, err := h.activityCalendar("ann")
+	// and it surfaces on the activity calendar's final (today) cell, with the
+	// window starting on a Sunday
+	start, cal, err := h.activityCalendar("ann")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if start.Weekday() != time.Sunday {
+		t.Errorf("expected the window to start on a Sunday, got %v", start.Weekday())
 	}
 	if last := cal[len(cal)-1]; last != len(testRound) {
 		t.Errorf("expected today's cell to read %d, got %d", len(testRound), last)

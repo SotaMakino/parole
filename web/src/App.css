@@ -1291,3 +1291,7 @@
 .app-footer .footer-sep {
   margin: 0 6px;
 }
+
+.app-footer .footer-copy {
+  color: rgba(58, 43, 40, 0.82); /* match the footer links */
+}

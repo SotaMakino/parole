@@ -815,6 +815,8 @@ let make = () => {
       }
       <footer className="app-footer">
         <p className="footer-links">
+          <span className="footer-copy"> {React.string(`© 2026 Sota Makino`)} </span>
+          <span className="footer-sep"> {React.string("|")} </span>
           <a href="/about.html"> {React.string(tr.about)} </a>
           <span className="footer-sep"> {React.string("|")} </span>
           <a href="/privacy.html"> {React.string(tr.privacy)} </a>

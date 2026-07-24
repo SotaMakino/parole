@@ -678,6 +678,34 @@ func TestRecordReviews_LeakedWordEarnsNothing(t *testing.T) {
 	}
 }
 
+// Winning credits every word toward the vocabulary tally, including one that
+// filled in entirely from another word's letters: the player produced all of
+// its letters, so they can spell it even though its streak stays 0 (see
+// TestRecordReviews_LeakedWordEarnsNothing for the scheduling side).
+func TestMe_CreditsAutoRevealedWordOnWin(t *testing.T) {
+	h := setupGames(t)
+	at := time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC)
+	freezeClock(t, at)
+
+	round := []string{"LIMONE", "MELONE", "TRENO", "BANCA", "PARCO"}
+	startRound(t, h, "ann", round)
+	if s := decodeState(t, solveRound(h, "ann", round)); s.Status != "won" {
+		t.Fatalf("expected the round won, got %+v", s)
+	}
+
+	rec := httptest.NewRecorder()
+	h.Me(rec, asUser("ann", "GET", "/me", ""))
+	var body struct {
+		Learned int `json:"learned"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Learned != 5 {
+		t.Errorf("expected all 5 words learned on a win, got %d", body.Learned)
+	}
+}
+
 func TestRecordReviews_LadderExpandsAndResets(t *testing.T) {
 	h := setupGames(t)
 	at := time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC)

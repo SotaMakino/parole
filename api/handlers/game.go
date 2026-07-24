@@ -150,12 +150,27 @@ func (h *Games) recordReviews(user string, g *game, attempts []attempt) error {
 		return err
 	}
 	retrieved := map[int]bool{}
+	produced := map[string]bool{}
 	for _, a := range attempts {
 		// Guess turns away a placement on an already revealed tile, so every
 		// correct attempt is a letter the player produced for that word
 		if g.correct(a) {
 			retrieved[a.word] = true
+			produced[a.letter] = true
 		}
+	}
+	// A word is learned once the player has personally produced every one of its
+	// letters, even if some of that word's tiles filled in from letters placed on
+	// other words — they can spell it. This is looser than retrieved (a tile
+	// placed on the word itself), which still governs review scheduling below: a
+	// word revealed for free is due again soon, but it counts toward the tally.
+	learnedWord := func(w string) bool {
+		for _, r := range g.answer(w) {
+			if !produced[string(r)] {
+				return false
+			}
+		}
+		return true
 	}
 	at := now()
 	for wi, w := range g.words {
@@ -172,7 +187,7 @@ func (h *Games) recordReviews(user string, g *game, attempts []attempt) error {
 			   last_seen = EXCLUDED.last_seen,
 			   streak = EXCLUDED.streak,
 			   learned = word_reviews.learned OR EXCLUDED.learned`,
-			user, w, due, at, streak, retrieved[wi]); err != nil {
+			user, w, due, at, streak, learnedWord(w)); err != nil {
 			return err
 		}
 	}

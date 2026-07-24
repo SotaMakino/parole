@@ -9,30 +9,50 @@ CURRICULUM
   Five Italian words are laid out with their English translations
   hidden.  Fill in the letters to reveal all five before you run out
   of mistakes.  Over 1,500 everyday words, with spaced repetition so
-  the ones you miss come back later.
+  every word you learn comes back before you lose it.
 
 WORD PRIORITIZATION
 
   Each round deals five words.  nextWords (api/handlers/game.go) fills
-  those five slots by trying four tiers in order, taking words from a
+  those five slots by trying three tiers in order, taking words from a
   tier until the round is full or the tier runs dry:
 
-    1. Review (spaced repetition).  Words you lost at least ReviewGap
-       (3) finished rounds ago and have not won since; oldest miss
-       first, so overdue words return before newer ones.
+    1. Review.  Words whose due date has arrived, most overdue first.
+       Words you got right are scheduled too, not only the ones you
+       missed: retrieving a word is what fixes it in memory, so a word
+       that stops being tested is a word being forgotten.
 
-    2. New words.  Words you have never played, taken in words.tsv
-       order.  The curriculum is ordered most-essential first, so
-       beginners meet the core vocabulary soonest instead of a random
-       scatter across all 1,500+ words.
+    2. New words.  Words you have never met, taken in words.tsv order.
+       The curriculum is ordered most-essential first, so beginners
+       meet the core vocabulary soonest instead of a random scatter
+       across all 1,500+ words.
 
-    3. Not-yet-won, oldest first.  Words you have played but not won
-       whose losses are not yet due for review; the ones you saw
-       longest ago come first.
+    3. Filler.  Once the curriculum runs out, whatever you saw longest
+       ago.
 
-    4. Recycle.  Once you have won everything, replay the words you
-       won longest ago.
+  Two guards apply to every tier.  No two words in a round share a
+  words.tsv theme, because meeting a whole semantic set at once -- five
+  colors, five numbers -- makes the words interfere with one another.
+  And a word seen within SessionGap (2 hours) is held back, so a long
+  sitting cannot stack a review right behind its first encounter.  Both
+  relax on a second pass rather than deal a short round.
 
-  A typical round mixes a couple of due review words with fresh core
-  vocabulary, and only falls back to tiers 3-4 once you have seen most
-  of the curriculum.
+  In the English direction the prompt is the English word, so words
+  whose translation is shared with another entry (PUSH is both SPINGERE
+  and SPINTA) are skipped there -- the tiles would be unanswerable.
+
+REVIEW SCHEDULING
+
+  word_reviews holds one row per word you have met: when it is due,
+  when you last saw it, and how many times running you have retrieved
+  it.  Each retrieval steps the word up a ladder of 1, 3, 7, 21 and 60
+  days.  The rungs are coarse on purpose -- widening gaps beat equal
+  ones only slightly, and the amount of spacing matters far more than
+  the shape of the schedule.
+
+  A correct placement opens that letter across every word on the board,
+  so a word can finish a round fully revealed without ever having been
+  recalled.  Only words you actually spelled a letter of advance the
+  ladder; the rest reset to zero and come due again next session.  The
+  vocabulary count in the account menu follows the same rule, so it
+  never credits a word the board gave away.
